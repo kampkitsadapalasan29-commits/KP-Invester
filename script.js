@@ -76,7 +76,7 @@ window.searchStock = async function () {
   document.getElementById("stockInfo").style.display = "none";
 
   try {
-    const API_KEY = "cshsp69r01qonq8hjs10cshsp69r01qonq8hjs1g";
+    const API_KEY = "d7qu6ohr01qudminhhpgd7qu6ohr01qudminhhq0";
     const response = await fetch(
       `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEY}`
     );
