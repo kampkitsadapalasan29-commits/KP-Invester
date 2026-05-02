@@ -64,71 +64,112 @@ window.showSection = function (sectionId) {
 };
 
 // ============================================
-// STOCKS (ย้ายมาไว้บนสุดด้วย)
+// STOCKS — Alpha Vantage + EMA + Support/Resistance
 // ============================================
 
 let stockChart;
+const AV_KEY = "EF98OLFV7JF7WTQD";
+
+function calcEMA(prices, period) {
+  const k = 2 / (period + 1);
+  const ema = [prices[0]];
+  for (let i = 1; i < prices.length; i++) {
+    ema.push(prices[i] * k + ema[i - 1] * (1 - k));
+  }
+  return ema;
+}
+
+function calcSupportResistance(prices, window = 5) {
+  const supports = [];
+  const resistances = [];
+  for (let i = window; i < prices.length - window; i++) {
+    const slice = prices.slice(i - window, i + window + 1);
+    const min = Math.min(...slice);
+    const max = Math.max(...slice);
+    if (prices[i] === min) supports.push(prices[i]);
+    if (prices[i] === max) resistances.push(prices[i]);
+  }
+  const support = supports.length ? Math.min(...supports) : null;
+  const resistance = resistances.length ? Math.max(...resistances) : null;
+  return { support, resistance };
+}
 
 window.searchStock = async function () {
   const symbol = document.getElementById("stockSymbol").value.toUpperCase();
   if (!symbol) return alert("Please enter a stock symbol");
 
   document.getElementById("stockInfo").style.display = "none";
+  document.getElementById("stockPrice").textContent = "Loading...";
 
   try {
-    const API_KEY = "d7qu6ohr01qudminhhpgd7qu6ohr01qudminhhq0";
-    const response = await fetch(
-      `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEY}`
-    );
-    const data = await response.json();
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${AV_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
 
-    if (data.c) {
-      document.getElementById(
-        "stockName"
-      ).textContent = `${symbol} - Stock Information`;
-      document.getElementById("stockPrice").textContent = `$${data.c.toFixed(
-        2
-      )}`;
-
-      const change = data.d;
-      const changePercent = data.dp;
-      document.getElementById("stockChange").textContent = `${
-        change >= 0 ? "+" : ""
-      }${change.toFixed(2)} (${
-        changePercent >= 0 ? "+" : ""
-      }${changePercent.toFixed(2)}%)`;
-      document.getElementById("stockChange").style.color =
-        change >= 0 ? "#10b981" : "#ef4444";
-
-      document.getElementById("stockVolume").textContent = "-";
-      document.getElementById("stockMarketCap").textContent = "-";
-
-      document.getElementById("stockInfo").style.display = "block";
-
-      await loadStockChart(symbol);
-    } else {
-      alert("Stock not found");
+    if (data["Note"]) {
+      alert("API limit reached (25/day). Please try again later.");
+      return;
     }
+
+    const ts = data["Time Series (Daily)"];
+    if (!ts) {
+      alert("Stock not found. Try: AAPL, MSFT, TSLA, GOOGL, META");
+      return;
+    }
+
+    const dates = Object.keys(ts).sort().slice(-60);
+    const closes = dates.map(d => parseFloat(ts[d]["4. close"]));
+    const volumes = dates.map(d => parseInt(ts[d]["5. volume"]));
+    const labels = dates.map(d => {
+      const dt = new Date(d);
+      return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    });
+
+    const latestClose = closes[closes.length - 1];
+    const prevClose = closes[closes.length - 2];
+    const change = latestClose - prevClose;
+    const changePct = (change / prevClose) * 100;
+    const latestVolume = volumes[volumes.length - 1];
+
+    document.getElementById("stockName").textContent = `${symbol} - Stock Information`;
+    document.getElementById("stockPrice").textContent = `$${latestClose.toFixed(2)}`;
+    document.getElementById("stockChange").textContent =
+      `${change >= 0 ? "+" : ""}${change.toFixed(2)} (${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%)`;
+    document.getElementById("stockChange").style.color = change >= 0 ? "#10b981" : "#ef4444";
+    document.getElementById("stockVolume").textContent = latestVolume.toLocaleString();
+    document.getElementById("stockMarketCap").textContent = "-";
+    document.getElementById("stockInfo").style.display = "block";
+
+    await loadStockChart(symbol, labels, closes);
   } catch (error) {
     console.error("Stock fetch failed:", error);
-    alert("Failed to fetch stock data. Try: AAPL, MSFT, TSLA, GOOGL");
+    alert("Failed to fetch stock data.");
   }
 };
 
-async function loadStockChart(symbol) {
-  const labels = [];
-  const prices = [];
-  const basePrice = 100 + Math.random() * 100;
+async function loadStockChart(symbol, labels, closes) {
+  const ema20 = calcEMA(closes, 20);
+  const ema50 = calcEMA(closes, 50);
+  const { support, resistance } = calcSupportResistance(closes);
 
-  for (let i = 30; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    labels.push(
-      date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    );
-
-    const variation = (Math.random() - 0.5) * 10;
-    prices.push(basePrice + variation);
+  const annotations = {};
+  if (support) {
+    annotations.support = {
+      type: "line",
+      yMin: support, yMax: support,
+      borderColor: "#10b981", borderWidth: 1.5,
+      borderDash: [6, 4],
+      label: { content: `Support $${support.toFixed(2)}`, display: true, position: "start", color: "#10b981", font: { size: 11 } }
+    };
+  }
+  if (resistance) {
+    annotations.resistance = {
+      type: "line",
+      yMin: resistance, yMax: resistance,
+      borderColor: "#ef4444", borderWidth: 1.5,
+      borderDash: [6, 4],
+      label: { content: `Resistance $${resistance.toFixed(2)}`, display: true, position: "start", color: "#ef4444", font: { size: 11 } }
+    };
   }
 
   if (stockChart) stockChart.destroy();
@@ -137,24 +178,45 @@ async function loadStockChart(symbol) {
   stockChart = new Chart(ctx, {
     type: "line",
     data: {
-      labels: labels,
+      labels,
       datasets: [
         {
           label: symbol,
-          data: prices,
+          data: closes,
           borderColor: "#3b82f6",
-          backgroundColor: "rgba(59, 130, 246, 0.1)",
-          tension: 0.4,
+          backgroundColor: "rgba(59,130,246,0.08)",
+          tension: 0.3,
           fill: true,
-          borderWidth: 2
+          borderWidth: 2,
+          pointRadius: 0
+        },
+        {
+          label: "EMA 20",
+          data: ema20,
+          borderColor: "#f59e0b",
+          borderWidth: 1.5,
+          tension: 0.3,
+          fill: false,
+          pointRadius: 0
+        },
+        {
+          label: "EMA 50",
+          data: ema50,
+          borderColor: "#8b5cf6",
+          borderWidth: 1.5,
+          tension: 0.3,
+          fill: false,
+          pointRadius: 0
         }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { display: false }
+        legend: { display: true, position: "top" },
+        annotation: annotations
       },
       scales: {
         y: { beginAtZero: false }
