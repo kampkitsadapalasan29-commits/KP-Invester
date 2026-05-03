@@ -2,160 +2,248 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <title>Finance Tracker Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>KP Invester</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
   <link rel="stylesheet" href="./style.css">
-  <style>
-    .th { font-size: 0.72rem; color: #888; display: block; margin-top: 1px; }
-    .nav-tab .th { color: rgba(255,255,255,0.6); }
-    .nav-tab.active .th { color: rgba(255,255,255,0.8); }
-    .ema-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-    .ema-row label { font-size: 0.82rem; color: #555; min-width: 80px; }
-    .ema-row input[type=number] { width: 70px; padding: 4px 8px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 0.85rem; }
-    .ema-row input[type=color] { width: 36px; height: 30px; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; padding: 2px; }
-    .ema-row .btn-remove { background: #fee2e2; color: #991b1b; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 0.8rem; }
-    .rsi-zone { font-size: 0.8rem; padding: 3px 10px; border-radius: 6px; display: inline-block; margin-top: 4px; font-weight: 600; }
-    .rsi-ob { background: #fee2e2; color: #991b1b; }
-    .rsi-os { background: #d1fae5; color: #065f46; }
-    .rsi-neutral { background: #f3f4f6; color: #374151; }
-    .sr-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-    .sr-badge { padding: 4px 14px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
-    .sr-support { background: #d1fae5; color: #065f46; }
-    .sr-resistance { background: #fee2e2; color: #991b1b; }
-    .analysis-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin-top: 12px; font-size: 0.875rem; line-height: 1.8; }
-  </style>
 </head>
 <body>
 
+<!-- TOP HEADER -->
 <header class="header">
-  <div class="header-content">
-    <div class="logo">💰 Finance Tracker Pro</div>
-    <nav class="nav-tabs">
-      <button class="nav-tab active" onclick="showSection('dashboard')">📊 Dashboard<span class="th">แดชบอร์ด</span></button>
-      <button class="nav-tab" onclick="showSection('finance')">💵 Finance<span class="th">การเงิน</span></button>
-      <button class="nav-tab" onclick="showSection('stocks')">📈 Stocks<span class="th">หุ้น</span></button>
-      <button class="nav-tab" onclick="showSection('portfolio')">💼 Portfolio<span class="th">พอร์ต</span></button>
-      <button class="nav-tab" onclick="showSection('dca')">🎯 DCA<span class="th">ลงทุนสม่ำเสมอ</span></button>
-    </nav>
-  </div>
+  <div class="logo">💰 KP <span>Invester</span></div>
+  <nav class="nav-tabs">
+    <button class="nav-tab active" onclick="showSection('dashboard', this)">📊 Dashboard<span class="th">แดชบอร์ด</span></button>
+    <button class="nav-tab" onclick="showSection('watchlist', this)">⭐ Watchlist<span class="th">หุ้นถูกใจ</span></button>
+    <button class="nav-tab" onclick="showSection('stocks', this)">📈 Stocks<span class="th">หุ้น</span></button>
+    <button class="nav-tab" onclick="showSection('finance', this)">💵 Finance<span class="th">การเงิน</span></button>
+    <button class="nav-tab" onclick="showSection('portfolio', this)">💼 Portfolio<span class="th">พอร์ต</span></button>
+    <button class="nav-tab" onclick="showSection('dca', this)">🎯 DCA</button>
+  </nav>
 </header>
+
+<!-- BOTTOM NAV (mobile) -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <button class="bnav-btn active" onclick="showSection('dashboard', this)" data-sec="dashboard"><span class="icon">📊</span>แดชบอร์ด</button>
+    <button class="bnav-btn" onclick="showSection('watchlist', this)" data-sec="watchlist"><span class="icon">⭐</span>ถูกใจ</button>
+    <button class="bnav-btn" onclick="showSection('stocks', this)" data-sec="stocks"><span class="icon">📈</span>หุ้น</button>
+    <button class="bnav-btn" onclick="showSection('finance', this)" data-sec="finance"><span class="icon">💵</span>การเงิน</button>
+    <button class="bnav-btn" onclick="showSection('portfolio', this)" data-sec="portfolio"><span class="icon">💼</span>พอร์ต</button>
+    <button class="bnav-btn" onclick="showSection('dca', this)" data-sec="dca"><span class="icon">🎯</span>DCA</button>
+  </div>
+</nav>
 
 <div class="container">
 
-  <!-- DASHBOARD -->
+  <!-- ══ DASHBOARD ══ -->
   <div id="dashboard" class="section active">
-    <h1 style="margin-bottom:1.5rem;">Dashboard Overview <span class="th" style="font-size:0.95rem;display:inline;">ภาพรวม</span></h1>
+    <div class="page-header"><h1>📊 Dashboard <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">ภาพรวม</span></h1></div>
+
     <div class="exchange-banner">
       <div>
-        <div style="font-size:0.875rem;opacity:0.9;">USD to THB Exchange Rate <span style="font-size:0.72rem;opacity:0.7;">อัตราแลกเปลี่ยน</span></div>
+        <div style="font-size:0.72rem;color:#93c5fd;">อัตราแลกเปลี่ยน USD → THB</div>
         <div class="exchange-rate" id="exchangeRate">Loading...</div>
       </div>
-      <div style="font-size:0.75rem;opacity:0.8;" id="exchangeTime">Updating...</div>
+      <div style="font-size:0.68rem;color:#93c5fd;" id="exchangeTime">กำลังอัปเดต...</div>
     </div>
-    <div class="grid grid-4">
-      <div class="stat-card">
-        <div class="stat-label">Total Net Worth<span class="th" style="color:rgba(255,255,255,0.7);">มูลค่าสุทธิรวม</span></div>
+
+    <div class="stat-grid">
+      <div class="stat-card accent-blue">
+        <div class="stat-label">มูลค่าสุทธิรวม</div>
         <div class="stat-value" id="totalNetWorth">฿0</div>
         <div class="stat-change">$<span id="totalNetWorthUSD">0</span> USD</div>
       </div>
-      <div class="stat-card success">
-        <div class="stat-label">This Month Income<span class="th" style="color:rgba(255,255,255,0.7);">รายรับเดือนนี้</span></div>
-        <div class="stat-value" id="monthIncome">฿0</div>
-        <div class="stat-change">+<span id="incomeChange">0</span>% vs last month</div>
-      </div>
-      <div class="stat-card danger">
-        <div class="stat-label">This Month Expenses<span class="th" style="color:rgba(255,255,255,0.7);">รายจ่ายเดือนนี้</span></div>
-        <div class="stat-value" id="monthExpense">฿0</div>
-        <div class="stat-change">+<span id="expenseChange">0</span>% vs last month</div>
-      </div>
-      <div class="stat-card warning">
-        <div class="stat-label">Portfolio Value<span class="th" style="color:rgba(255,255,255,0.7);">มูลค่าพอร์ต</span></div>
+      <div class="stat-card accent-gold">
+        <div class="stat-label">มูลค่าพอร์ต</div>
         <div class="stat-value" id="portfolioValue">฿0</div>
         <div class="stat-change"><span id="portfolioReturn">0</span>% return</div>
       </div>
+      <div class="stat-card accent-green">
+        <div class="stat-label">รายรับเดือนนี้</div>
+        <div class="stat-value" id="monthIncome">฿0</div>
+        <div class="stat-change" id="incomeChangeTxt">เดือนนี้</div>
+      </div>
+      <div class="stat-card accent-red">
+        <div class="stat-label">รายจ่ายเดือนนี้</div>
+        <div class="stat-value" id="monthExpense">฿0</div>
+        <div class="stat-change" id="expenseChangeTxt">เดือนนี้</div>
+      </div>
     </div>
-    <div class="grid grid-2">
-      <div class="card">
-        <div class="card-title">📊 Monthly Finance Trend<span class="th">แนวโน้มการเงินรายเดือน</span></div>
-        <div class="chart-container"><canvas id="financeChart"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-title">📈 Portfolio Growth<span class="th">การเติบโตของพอร์ต</span></div>
-        <div class="chart-container"><canvas id="portfolioChart"></canvas></div>
-      </div>
+
+    <div class="card">
+      <div class="card-title">📊 แนวโน้มการเงิน <span class="th">Monthly Finance Trend</span></div>
+      <div class="chart-container"><canvas id="financeChart"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title">🕒 Recent Transactions<span class="th">รายการล่าสุด</span></div>
+      <div class="card-title">📈 การเติบโตพอร์ต <span class="th">Portfolio Growth</span></div>
+      <div class="chart-container"><canvas id="portfolioChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🕒 รายการล่าสุด <span class="th">Recent Transactions</span></div>
       <div class="table-container">
         <table>
           <thead><tr>
-            <th>Date<span class="th">วันที่</span></th>
-            <th>Description<span class="th">รายละเอียด</span></th>
-            <th>Category<span class="th">หมวดหมู่</span></th>
-            <th>Amount<span class="th">จำนวน</span></th>
-            <th>Type<span class="th">ประเภท</span></th>
+            <th>วันที่</th><th>รายละเอียด</th><th>หมวด</th><th>จำนวน</th><th>ประเภท</th>
           </tr></thead>
           <tbody id="recentTransactions">
-            <tr><td colspan="5" style="text-align:center;color:#999;">ยังไม่มีรายการ</td></tr>
+            <tr><td colspan="5" style="text-align:center;color:var(--text-dim);">ยังไม่มีรายการ</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
 
-  <!-- FINANCE -->
-  <div id="finance" class="section">
-    <h1 style="margin-bottom:1.5rem;">Finance Tracker <span class="th" style="font-size:0.95rem;display:inline;">ติดตามการเงิน</span></h1>
+  <!-- ══ WATCHLIST ══ -->
+  <div id="watchlist" class="section">
+    <div class="page-header"><h1>⭐ Watchlist <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">หุ้นที่ถูกใจ</span></h1></div>
+
+    <!-- Add to watchlist -->
     <div class="card">
-      <div class="card-title">➕ Add Transaction<span class="th">เพิ่มรายการ</span></div>
+      <div class="card-title">➕ เพิ่มหุ้น <span class="th">Add Stock</span></div>
+      <div class="search-bar">
+        <input type="text" class="form-input" id="watchInput" placeholder="เช่น AAPL, META, TSLA" style="text-transform:uppercase;">
+        <button class="btn btn-primary" onclick="addToWatchlist()">เพิ่ม</button>
+      </div>
+    </div>
+
+    <!-- Ticker bar -->
+    <div id="watchTickerWrap" style="display:none;" class="card" style="padding:0;">
+      <div class="card-title">⚡ ราคาวิ่ง <span class="th">Live Prices</span></div>
+      <div class="ticker-inner" id="watchTicker"></div>
+    </div>
+
+    <!-- Watchlist table -->
+    <div class="card">
+      <div class="card-title">📋 รายการหุ้นถูกใจ</div>
+      <div id="watchlistContent">
+        <div style="text-align:center;color:var(--text-dim);padding:2rem;font-size:0.85rem;">
+          ⭐ ยังไม่มีหุ้นในรายการ<br>เพิ่มหุ้นด้านบนเพื่อติดตามราคา
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ STOCKS ══ -->
+  <div id="stocks" class="section">
+    <div class="page-header"><h1>📈 Stocks <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">วิเคราะห์หุ้น</span></h1></div>
+
+    <div class="card">
+      <div class="card-title">🔍 ค้นหาหุ้น <span class="th">Search Stock</span></div>
+      <div class="search-bar">
+        <input type="text" class="form-input" id="stockSymbol" placeholder="เช่น AAPL, META, TSLA, GOOGL" style="text-transform:uppercase;">
+        <button class="btn btn-primary" onclick="searchStock()">ค้นหา</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚙️ ตั้งค่าเส้น EMA <span class="th">EMA Settings</span></div>
+      <div id="emaList"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-outline btn-sm" onclick="addEmaLine()">+ เพิ่มเส้น EMA</button>
+        <button class="btn btn-primary btn-sm" onclick="applyEmaChanges()">✓ ใช้งาน Apply</button>
+      </div>
+    </div>
+
+    <div id="stockInfo" style="display:none;">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div class="card-title" id="stockName" style="margin-bottom:0;">Stock Info</div>
+          <button id="favBtn" class="fav-btn" onclick="toggleFav()" title="ถูกใจ">☆</button>
+        </div>
+        <div class="grid grid-2" style="margin-top:12px;">
+          <div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">ราคาปัจจุบัน</div>
+            <div style="font-size:1.6rem;font-weight:900;color:var(--text);" id="stockPrice">-</div>
+          </div>
+          <div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">เปลี่ยนแปลง</div>
+            <div style="font-size:1.2rem;font-weight:700;" id="stockChange">-</div>
+          </div>
+          <div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">ปริมาณซื้อขาย</div>
+            <div style="font-size:1rem;font-weight:700;color:var(--text);" id="stockVolume">-</div>
+          </div>
+          <div>
+            <div style="font-size:0.72rem;color:var(--text-sub);">RSI (14)</div>
+            <div style="font-size:1rem;font-weight:700;" id="stockRsi">-</div>
+            <div id="rsiZone"></div>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">แนวรับ / แนวต้าน</div>
+          <div class="sr-badges" id="srBadges"></div>
+        </div>
+        <div class="analysis-box" id="analysisBox" style="display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📈 กราฟราคา <span class="th">Price Chart</span></div>
+        <div class="chart-container" style="height:320px;"><canvas id="stockChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 RSI Chart <span class="th">เหนือ 70 = ซื้อมากเกิน / ต่ำ 30 = ขายมากเกิน</span></div>
+        <div class="chart-container" style="height:160px;"><canvas id="rsiChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ FINANCE ══ -->
+  <div id="finance" class="section">
+    <div class="page-header"><h1>💵 Finance <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">ติดตามการเงิน</span></h1></div>
+
+    <div class="card">
+      <div class="card-title">➕ เพิ่มรายการ <span class="th">Add Transaction</span></div>
       <form id="transactionForm">
-        <div class="grid grid-4">
+        <div class="grid grid-2">
           <div class="form-group">
-            <label class="form-label">Date<span class="th">วันที่</span></label>
+            <label class="form-label">วันที่ <span class="th">Date</span></label>
             <input type="date" class="form-input" id="txDate" required>
           </div>
           <div class="form-group">
-            <label class="form-label">Type<span class="th">ประเภท</span></label>
+            <label class="form-label">ประเภท <span class="th">Type</span></label>
             <select class="form-select" id="txType" required>
-              <option value="income">Income / รายรับ</option>
-              <option value="expense">Expense / รายจ่าย</option>
+              <option value="income">รายรับ / Income</option>
+              <option value="expense">รายจ่าย / Expense</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Category<span class="th">หมวดหมู่</span></label>
+            <label class="form-label">หมวดหมู่ <span class="th">Category</span></label>
             <select class="form-select" id="txCategory" required>
-              <option value="salary">Salary / เงินเดือน</option>
-              <option value="food">Food / อาหาร</option>
-              <option value="transport">Transport / การเดินทาง</option>
-              <option value="shopping">Shopping / ช้อปปิ้ง</option>
-              <option value="bills">Bills / ค่าใช้จ่าย</option>
-              <option value="other">Other / อื่นๆ</option>
+              <option value="salary">เงินเดือน / Salary</option>
+              <option value="food">อาหาร / Food</option>
+              <option value="transport">การเดินทาง / Transport</option>
+              <option value="shopping">ช้อปปิ้ง / Shopping</option>
+              <option value="bills">ค่าใช้จ่าย / Bills</option>
+              <option value="invest">ลงทุน / Investment</option>
+              <option value="other">อื่นๆ / Other</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Amount (THB ฿)<span class="th">จำนวนเงิน (บาท)</span></label>
+            <label class="form-label">จำนวน (฿) <span class="th">Amount THB</span></label>
             <input type="number" class="form-input" id="txAmount" step="1" placeholder="฿0" required>
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Description<span class="th">รายละเอียด</span></label>
+          <label class="form-label">รายละเอียด <span class="th">Description</span></label>
           <input type="text" class="form-input" id="txDescription" required>
         </div>
-        <button type="submit" class="btn btn-primary">Add Transaction / เพิ่มรายการ</button>
+        <button type="submit" class="btn btn-primary btn-full">✓ เพิ่มรายการ</button>
       </form>
     </div>
+
     <div class="card">
-      <div class="card-title">📋 All Transactions<span class="th">รายการทั้งหมด</span></div>
+      <div class="card-title">📋 รายการทั้งหมด <span class="th">All Transactions</span></div>
       <div class="table-container">
         <table>
           <thead><tr>
-            <th>Date<span class="th">วันที่</span></th>
-            <th>Description<span class="th">รายละเอียด</span></th>
-            <th>Category<span class="th">หมวดหมู่</span></th>
-            <th>Amount (THB)<span class="th">จำนวน (บาท)</span></th>
-            <th>Amount (USD)<span class="th">จำนวน (USD)</span></th>
-            <th>Type<span class="th">ประเภท</span></th>
-            <th>Actions<span class="th">จัดการ</span></th>
+            <th>วันที่<span class="th">Date</span></th>
+            <th>รายละเอียด<span class="th">Desc</span></th>
+            <th>หมวด<span class="th">Cat</span></th>
+            <th>จำนวน (฿)<span class="th">THB</span></th>
+            <th>USD</th>
+            <th>ประเภท<span class="th">Type</span></th>
+            <th></th>
           </tr></thead>
           <tbody id="transactionsList"></tbody>
         </table>
@@ -163,115 +251,50 @@
     </div>
   </div>
 
-  <!-- STOCKS -->
-  <div id="stocks" class="section">
-    <h1 style="margin-bottom:1.5rem;">Stock Market <span class="th" style="font-size:0.95rem;display:inline;">ตลาดหุ้น</span></h1>
-    <div class="card">
-      <div class="card-title">🔍 Search Stock<span class="th">ค้นหาหุ้น</span></div>
-      <div class="grid grid-4">
-        <input type="text" class="form-input" id="stockSymbol" placeholder="เช่น AAPL, META, TSLA, GOOGL" style="grid-column:span 3;">
-        <button class="btn btn-primary" onclick="searchStock()">Search / ค้นหา</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">⚙️ EMA Settings<span class="th">ตั้งค่าเส้น EMA (เพิ่ม/แก้ไข/ลบได้)</span></div>
-      <div id="emaList"></div>
-      <button class="btn btn-primary" onclick="addEmaLine()" style="margin-top:6px;">+ Add EMA Line / เพิ่มเส้น EMA</button>
-      <button class="btn btn-success" onclick="applyEmaChanges()" style="margin-top:6px;margin-left:8px;">Apply / ใช้งาน</button>
-    </div>
-
-    <div id="stockInfo" style="display:none;">
-      <div class="card">
-        <div class="card-title" id="stockName">Stock Information<span class="th">ข้อมูลหุ้น</span></div>
-        <div class="grid grid-4">
-          <div>
-            <div style="font-size:0.875rem;color:#666;">Current Price<span class="th">ราคาปัจจุบัน</span></div>
-            <div style="font-size:1.5rem;font-weight:bold;" id="stockPrice">-</div>
-          </div>
-          <div>
-            <div style="font-size:0.875rem;color:#666;">Change<span class="th">การเปลี่ยนแปลง</span></div>
-            <div style="font-size:1.5rem;font-weight:bold;" id="stockChange">-</div>
-          </div>
-          <div>
-            <div style="font-size:0.875rem;color:#666;">Volume<span class="th">ปริมาณซื้อขาย</span></div>
-            <div style="font-size:1.5rem;font-weight:bold;" id="stockVolume">-</div>
-          </div>
-          <div>
-            <div style="font-size:0.875rem;color:#666;">RSI (14)<span class="th">ดัชนี RSI</span></div>
-            <div style="font-size:1.5rem;font-weight:bold;" id="stockRsi">-</div>
-            <div id="rsiZone"></div>
-          </div>
-        </div>
-        <div style="margin-top:14px;">
-          <div style="font-size:0.875rem;color:#666;margin-bottom:4px;">Support & Resistance Levels<span class="th">แนวรับและแนวต้าน</span></div>
-          <div class="sr-badges" id="srBadges"></div>
-        </div>
-        <div class="analysis-box" id="analysisBox" style="display:none;"></div>
-      </div>
-      <div class="card">
-        <div class="card-title">📈 Price Chart<span class="th">กราฟราคา</span></div>
-        <div class="chart-container" style="height:420px;"><canvas id="stockChart"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-title">📊 RSI Chart (14)<span class="th">กราฟ RSI — เหนือ 70 = Overbought / ต่ำกว่า 30 = Oversold</span></div>
-        <div class="chart-container" style="height:200px;"><canvas id="rsiChart"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- PORTFOLIO -->
+  <!-- ══ PORTFOLIO ══ -->
   <div id="portfolio" class="section">
-    <h1 style="margin-bottom:1.5rem;">Portfolio Tracker <span class="th" style="font-size:0.95rem;display:inline;">พอร์ตการลงทุน</span></h1>
+    <div class="page-header"><h1>💼 Portfolio <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">พอร์ตการลงทุน</span></h1></div>
     <div class="card">
-      <div class="card-title">➕ Add Position<span class="th">เพิ่มรายการซื้อขาย</span></div>
+      <div class="card-title">➕ เพิ่มรายการซื้อขาย <span class="th">Add Position</span></div>
       <form id="positionForm">
-        <div class="grid grid-4">
+        <div class="grid grid-2">
           <div class="form-group">
-            <label class="form-label">Date<span class="th">วันที่</span></label>
+            <label class="form-label">วันที่</label>
             <input type="date" class="form-input" id="posDate" required>
           </div>
           <div class="form-group">
-            <label class="form-label">Symbol<span class="th">ชื่อหุ้น</span></label>
-            <input type="text" class="form-input" id="posSymbol" placeholder="AAPL" required>
+            <label class="form-label">ชื่อหุ้น <span class="th">Symbol</span></label>
+            <input type="text" class="form-input" id="posSymbol" placeholder="AAPL" required style="text-transform:uppercase;">
           </div>
           <div class="form-group">
-            <label class="form-label">Type<span class="th">ประเภท</span></label>
+            <label class="form-label">ประเภท <span class="th">Type</span></label>
             <select class="form-select" id="posType" required>
-              <option value="buy">Buy / ซื้อ</option>
-              <option value="sell">Sell / ขาย</option>
+              <option value="buy">ซื้อ / Buy</option>
+              <option value="sell">ขาย / Sell</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Shares<span class="th">จำนวนหุ้น</span></label>
+            <label class="form-label">จำนวนหุ้น <span class="th">Shares</span></label>
             <input type="number" class="form-input" id="posShares" required>
           </div>
-        </div>
-        <div class="grid grid-2">
           <div class="form-group">
-            <label class="form-label">Price per Share (USD)<span class="th">ราคาต่อหุ้น (USD)</span></label>
+            <label class="form-label">ราคาต่อหุ้น (USD)</label>
             <input type="number" class="form-input" id="posPrice" step="0.01" required>
           </div>
           <div class="form-group">
-            <label class="form-label">Total (USD)<span class="th">ยอดรวม (USD)</span></label>
-            <input type="number" class="form-input" id="posTotal" step="0.01" readonly>
+            <label class="form-label">ยอดรวม (USD)</label>
+            <input type="number" class="form-input" id="posTotal" step="0.01" readonly style="opacity:0.6;">
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">Add Position / เพิ่มรายการ</button>
+        <button type="submit" class="btn btn-primary btn-full">✓ เพิ่มรายการ</button>
       </form>
     </div>
     <div class="card">
-      <div class="card-title">📊 Current Holdings<span class="th">หุ้นที่ถืออยู่</span></div>
+      <div class="card-title">📊 หุ้นที่ถืออยู่ <span class="th">Current Holdings</span></div>
       <div class="table-container">
         <table>
           <thead><tr>
-            <th>Symbol<span class="th">หุ้น</span></th>
-            <th>Shares<span class="th">จำนวน</span></th>
-            <th>Avg Cost<span class="th">ต้นทุนเฉลี่ย</span></th>
-            <th>Current Price<span class="th">ราคาปัจจุบัน</span></th>
-            <th>Total Value<span class="th">มูลค่ารวม</span></th>
-            <th>P&L<span class="th">กำไร/ขาดทุน</span></th>
-            <th>P&L %</th>
+            <th>หุ้น</th><th>จำนวน</th><th>ต้นทุน/หุ้น</th><th>ราคาปัจจุบัน</th><th>มูลค่ารวม</th><th>กำไร/ขาดทุน</th><th>%</th>
           </tr></thead>
           <tbody id="holdingsList"></tbody>
         </table>
@@ -279,91 +302,89 @@
     </div>
   </div>
 
-  <!-- DCA -->
+  <!-- ══ DCA ══ -->
   <div id="dca" class="section">
-    <h1 style="margin-bottom:1.5rem;">DCA Calculator & Retirement Planner <span class="th" style="font-size:0.95rem;display:inline;">คำนวณ DCA และวางแผนเกษียณ</span></h1>
+    <div class="page-header"><h1>🎯 DCA Calculator <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">วางแผนการลงทุน</span></h1></div>
     <div class="card">
-      <div class="card-title">🧮 DCA Calculator<span class="th">เครื่องคำนวณ DCA</span></div>
-      <form id="dcaForm">
-        <div class="grid grid-3">
-          <div class="form-group">
-            <label class="form-label">Initial Investment (USD)<span class="th">เงินลงทุนเริ่มต้น</span></label>
-            <input type="number" class="form-input" id="dcaInitial" value="10000" step="1000">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Monthly Contribution (USD)<span class="th">ลงทุนรายเดือน</span></label>
-            <input type="number" class="form-input" id="dcaMonthly" value="1000" step="100">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Years<span class="th">จำนวนปี</span></label>
-            <input type="number" class="form-input" id="dcaYears" value="30" min="1">
-          </div>
+      <div class="card-title">🧮 คำนวณ DCA <span class="th">DCA Calculator</span></div>
+      <div class="grid grid-2">
+        <div class="form-group">
+          <label class="form-label">เงินลงทุนเริ่มต้น (USD)</label>
+          <input type="number" class="form-input" id="dcaInitial" value="10000" step="1000">
         </div>
-        <div class="grid grid-3">
-          <div class="form-group">
-            <label class="form-label">Annual Return (%)<span class="th">ผลตอบแทนต่อปี</span></label>
-            <input type="number" class="form-input" id="dcaReturn" value="8" step="0.1">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Current Age<span class="th">อายุปัจจุบัน</span></label>
-            <input type="number" class="form-input" id="dcaAge" value="35" min="18">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Retirement Age<span class="th">อายุเกษียณ</span></label>
-            <input type="number" class="form-input" id="dcaRetireAge" value="65" min="18">
-          </div>
+        <div class="form-group">
+          <label class="form-label">ลงทุนรายเดือน (USD)</label>
+          <input type="number" class="form-input" id="dcaMonthly" value="1000" step="100">
         </div>
-        <button type="button" class="btn btn-primary" onclick="calculateDCA()">Calculate / คำนวณ</button>
-      </form>
+        <div class="form-group">
+          <label class="form-label">จำนวนปี <span class="th">Years</span></label>
+          <input type="number" class="form-input" id="dcaYears" value="30" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ผลตอบแทนต่อปี (%)</label>
+          <input type="number" class="form-input" id="dcaReturn" value="8" step="0.1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">อายุปัจจุบัน</label>
+          <input type="number" class="form-input" id="dcaAge" value="35" min="18">
+        </div>
+        <div class="form-group">
+          <label class="form-label">อายุเกษียณ</label>
+          <input type="number" class="form-input" id="dcaRetireAge" value="65" min="18">
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-full" onclick="calculateDCA()">🧮 คำนวณ</button>
     </div>
+
     <div id="dcaResults" style="display:none;">
-      <div class="grid grid-3">
-        <div class="stat-card">
-          <div class="stat-label">Final Balance<span class="th" style="color:rgba(255,255,255,0.7);">ยอดสุดท้าย</span></div>
+      <div class="stat-grid">
+        <div class="stat-card accent-blue">
+          <div class="stat-label">ยอดสุดท้าย Final Balance</div>
           <div class="stat-value" id="dcaFinal">$0</div>
           <div class="stat-change">฿<span id="dcaFinalTHB">0</span></div>
         </div>
-        <div class="stat-card success">
-          <div class="stat-label">Total Invested<span class="th" style="color:rgba(255,255,255,0.7);">เงินลงทุนรวม</span></div>
-          <div class="stat-value" id="dcaInvested">$0</div>
-        </div>
-        <div class="stat-card warning">
-          <div class="stat-label">Total Gains<span class="th" style="color:rgba(255,255,255,0.7);">กำไรรวม</span></div>
+        <div class="stat-card accent-green">
+          <div class="stat-label">กำไรรวม Total Gains</div>
           <div class="stat-value" id="dcaGains">$0</div>
           <div class="stat-change"><span id="dcaReturnPercent">0</span>% return</div>
         </div>
+        <div class="stat-card accent-gold">
+          <div class="stat-label">เงินลงทุนรวม Invested</div>
+          <div class="stat-value" id="dcaInvested">$0</div>
+        </div>
+        <div class="stat-card accent-red" style="display:flex;flex-direction:column;justify-content:center;">
+          <div class="stat-label">ถอนได้ต่อเดือน (4% Rule)</div>
+          <div class="stat-value" id="retirement2">$0</div>
+        </div>
       </div>
       <div class="card">
-        <div class="card-title">📈 Growth Over Time<span class="th">การเติบโตตามเวลา</span></div>
-        <div class="chart-container" style="height:400px;"><canvas id="dcaChart"></canvas></div>
+        <div class="card-title">📈 การเติบโตตามเวลา</div>
+        <div class="chart-container" style="height:280px;"><canvas id="dcaChart"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-title">🏖️ Retirement Income Options<span class="th">ตัวเลือกรายได้หลังเกษียณ</span></div>
-        <div class="grid grid-3">
-          <div>
-            <h4>Fixed Withdrawal (25 years)<span class="th">ถอนคงที่ 25 ปี</span></h4>
-            <div style="font-size:1.5rem;font-weight:bold;color:var(--primary);" id="retirement1">$0</div>
-            <div style="font-size:0.875rem;color:#666;">per month / ต่อเดือน</div>
-            <p style="margin-top:0.5rem;font-size:0.875rem;">เงินหมดตอนอายุ <span id="depleteAge">-</span> ปี</p>
+        <div class="card-title">🏖️ ตัวเลือกรายได้หลังเกษียณ</div>
+        <div class="grid grid-3" style="gap:12px;">
+          <div style="background:var(--bg-card2);border-radius:10px;padding:12px;">
+            <div style="font-size:0.72rem;color:var(--text-sub);">ถอนคงที่ 25 ปี</div>
+            <div style="font-size:1.2rem;font-weight:800;color:var(--primary);" id="retirement1">$0</div>
+            <div style="font-size:0.68rem;color:var(--text-dim);">ต่อเดือน / เงินหมดอายุ <span id="depleteAge">-</span></div>
           </div>
-          <div>
-            <h4>4% Rule (Sustainable)<span class="th">กฎ 4% ยั่งยืน</span></h4>
-            <div style="font-size:1.5rem;font-weight:bold;color:var(--success);" id="retirement2">$0</div>
-            <div style="font-size:0.875rem;color:#666;">per month / ต่อเดือน</div>
-            <p style="margin-top:0.5rem;font-size:0.875rem;">เงินต้นคงอยู่ ✅</p>
+          <div style="background:var(--bg-card2);border-radius:10px;padding:12px;">
+            <div style="font-size:0.72rem;color:var(--text-sub);">4% Rule ยั่งยืน</div>
+            <div style="font-size:1.2rem;font-weight:800;color:var(--success);" id="retirement2b">$0</div>
+            <div style="font-size:0.68rem;color:var(--text-dim);">ต่อเดือน / เงินต้นคงอยู่ ✅</div>
           </div>
-          <div>
-            <h4>Interest Only (5%)<span class="th">ดอกเบี้ยอย่างเดียว</span></h4>
-            <div style="font-size:1.5rem;font-weight:bold;color:var(--warning);" id="retirement3">$0</div>
-            <div style="font-size:0.875rem;color:#666;">per month / ต่อเดือน</div>
-            <p style="margin-top:0.5rem;font-size:0.875rem;">เงินต้นเพิ่มขึ้น ✅</p>
+          <div style="background:var(--bg-card2);border-radius:10px;padding:12px;">
+            <div style="font-size:0.72rem;color:var(--text-sub);">ดอกเบี้ย 5%</div>
+            <div style="font-size:1.2rem;font-weight:800;color:var(--gold);" id="retirement3">$0</div>
+            <div style="font-size:0.68rem;color:var(--text-dim);">ต่อเดือน / เงินต้นเพิ่ม ✅</div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-</div>
+</div><!-- /container -->
 <script src="./script.js"></script>
 </body>
 </html>
