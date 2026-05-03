@@ -8,10 +8,10 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-<canvas id="particle-canvas"></canvas>
+<canvas id="particle-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0.5;"></canvas>
 
 <!-- TOP HEADER -->
-<header class="header">
+<header class="header" style="position:sticky;top:0;z-index:200;">
   <div class="logo">💰 KP <span>Invester</span></div>
   <div style="display:flex;align-items:center;gap:8px;">
     <button id="themeBtn" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:1rem;">🌙</button>
@@ -42,7 +42,7 @@
   </div>
 </nav>
 
-<div class="container">
+<div class="container" style="position:relative;z-index:10;">
 
   <!-- ══ DASHBOARD ══ -->
   <div id="dashboard" class="section active">
