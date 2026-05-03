@@ -99,46 +99,47 @@ async function renderWatchlist() {
     return;
   }
 
-  content.innerHTML = `<div style="text-align:center;color:var(--text-sub);padding:1rem;font-size:0.8rem;">⏳ กำลังโหลดราคา...</div>`;
   tickerWrap.style.display = "block";
 
-  const results = await Promise.all(favs.map(async sym => ({ sym, data: await fetchStockPrice(sym) })));
+  const results = await Promise.all(favs.map(async sym => {
+    try { return { sym, data: await fetchStockPrice(sym) }; }
+    catch { return { sym, data: null }; }
+  }));
 
-  // Ticker bar
   ticker.innerHTML = results.map(r => {
-    if (!r.data) return `<div class="ticker-item"><div class="ticker-sym">${r.sym}</div><div class="ticker-price">N/A</div></div>`;
+    if (!r.data) return `<div class="ticker-item"><div class="ticker-sym">${r.sym}</div><div class="ticker-price" style="color:var(--text-dim)">—</div></div>`;
     const up = r.data.change >= 0;
     return `<div class="ticker-item" onclick="quickSearch('${r.sym}')">
       <div class="ticker-sym">${r.sym}</div>
       <div class="ticker-price">$${r.data.price.toFixed(2)}</div>
-      <div class="ticker-chg ${up ? 'up' : 'dn'}">${up ? '+' : ''}${r.data.change.toFixed(2)} (${r.data.changePct.toFixed(2)}%)</div>
+      <div class="ticker-chg ${up?'up':'dn'}">${up?'+':''}${r.data.change.toFixed(2)} (${r.data.changePct.toFixed(2)}%)</div>
     </div>`;
   }).join("");
 
-  // Table
-  content.innerHTML = `
-    <div class="table-container">
-      <table>
-        <thead><tr>
-          <th>หุ้น</th><th>ราคา</th><th>เปลี่ยน</th><th>%</th><th>฿ THB</th><th>วิเคราะห์</th><th>ลบ</th>
-        </tr></thead>
-        <tbody>
-          ${results.map(r => {
-            if (!r.data) return `<tr><td><strong style="color:var(--accent)">${r.sym}</strong></td><td colspan="5" style="color:var(--text-dim)">ดึงข้อมูลไม่ได้</td><td><button class="btn btn-danger btn-sm" onclick="removeFromWatchlist('${r.sym}')">ลบ</button></td></tr>`;
-            const up = r.data.change >= 0;
-            return `<tr>
-              <td><strong style="color:var(--accent)">${r.sym}</strong></td>
-              <td style="font-weight:700;">$${r.data.price.toFixed(2)}</td>
-              <td style="color:${up ? 'var(--bull)' : 'var(--bear)'};">${up ? '+' : ''}${r.data.change.toFixed(2)}</td>
-              <td style="color:${up ? 'var(--bull)' : 'var(--bear)'};">${up ? '+' : ''}${r.data.changePct.toFixed(2)}%</td>
-              <td>฿${(r.data.price * EXCHANGE_RATE).toFixed(0)}</td>
-              <td><button class="btn btn-outline btn-sm" onclick="quickSearch('${r.sym}')">📈 วิเคราะห์</button></td>
-              <td><button class="btn btn-danger btn-sm" onclick="removeFromWatchlist('${r.sym}')">ลบ</button></td>
-            </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>`;
+  const rows = results.map(r => {
+    if (!r.data) return `<tr>
+      <td><strong style="color:var(--accent)">${r.sym}</strong></td>
+      <td colspan="4" style="color:var(--text-dim);font-size:0.78rem;">⚠️ ดึงข้อมูลไม่ได้ (API limit หรือไม่พบหุ้น)</td>
+      <td><button class="btn btn-outline btn-sm" onclick="quickSearch('${r.sym}')">📈</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeFromWatchlist('${r.sym}')">ลบ</button></td>
+    </tr>`;
+    const up = r.data.change >= 0;
+    return `<tr>
+      <td><strong style="color:var(--accent)">${r.sym}</strong></td>
+      <td style="font-weight:700;">$${r.data.price.toFixed(2)}</td>
+      <td style="color:${up?'var(--bull)':'var(--bear)'};">${up?'+':''}${r.data.change.toFixed(2)}</td>
+      <td style="color:${up?'var(--bull)':'var(--bear)'};">${up?'+':''}${r.data.changePct.toFixed(2)}%</td>
+      <td>฿${(r.data.price * EXCHANGE_RATE).toFixed(0)}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="quickSearch('${r.sym}')">📈 วิเคราะห์</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeFromWatchlist('${r.sym}')">ลบ</button></td>
+    </tr>`;
+  }).join("");
+
+  content.innerHTML = `<div class="table-container"><table>
+    <thead><tr><th>หุ้น</th><th>ราคา</th><th>เปลี่ยน</th><th>%</th><th>฿ THB</th><th>วิเคราะห์</th><th>ลบ</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>
+  <div style="font-size:0.7rem;color:var(--text-dim);margin-top:8px;text-align:right;">⏱ cache 60 วิ · Alpha Vantage จำกัด 25 req/วัน</div>`;
 }
 
 window.removeFromWatchlist = async function(sym) {
@@ -184,28 +185,28 @@ function updateFavBtn(sym) {
 let stockChart, rsiChart;
 let lastCloses = [], lastLabels = [];
 
-let emaLines = [
-  { period: 20, color: "#f59e0b" },
-  { period: 50, color: "#a78bfa" }
-];
+const DEFAULT_EMA = [{ period: 20, color: "#f59e0b" }, { period: 50, color: "#a78bfa" }];
+let emaLines = Storage.get("emaLines") || DEFAULT_EMA;
+
+function saveEmaLines() { Storage.set("emaLines", emaLines); }
 
 function renderEmaControls() {
   const list = document.getElementById("emaList");
   if (!list) return;
-  list.innerHTML = emaLines.map((e, i) => `
+  list.innerHTML = emaLines.length ? emaLines.map((e, i) => `
     <div class="ema-row">
       <label>คาบ/Period:</label>
-      <input type="number" min="2" max="200" value="${e.period}" onchange="emaLines[${i}].period=parseInt(this.value)">
+      <input type="number" min="2" max="200" value="${e.period}" onchange="emaLines[${i}].period=parseInt(this.value);saveEmaLines();">
       <label>สี/Color:</label>
-      <input type="color" value="${e.color}" onchange="emaLines[${i}].color=this.value">
+      <input type="color" value="${e.color}" onchange="emaLines[${i}].color=this.value;saveEmaLines();">
       <button class="btn-remove" onclick="removeEmaLine(${i})">✕ ลบ</button>
     </div>
-  `).join("") || '<div style="color:var(--text-dim);font-size:0.8rem;">ไม่มีเส้น EMA</div>';
+  `).join("") : '<div style="color:var(--text-dim);font-size:0.8rem;padding:4px;">ไม่มีเส้น EMA — กด "+ เพิ่มเส้น EMA"</div>';
 }
 
-window.addEmaLine = function() { emaLines.push({ period: 100, color: "#22c55e" }); renderEmaControls(); };
-window.removeEmaLine = function(i) { emaLines.splice(i, 1); renderEmaControls(); if (lastCloses.length) loadStockChart(currentSymbol, lastLabels, lastCloses); };
-window.applyEmaChanges = function() { if (lastCloses.length) loadStockChart(currentSymbol, lastLabels, lastCloses); };
+window.addEmaLine = function() { emaLines.push({ period: 100, color: "#22c55e" }); saveEmaLines(); renderEmaControls(); };
+window.removeEmaLine = function(i) { emaLines.splice(i, 1); saveEmaLines(); renderEmaControls(); if (lastCloses.length) loadStockChart(currentSymbol, lastLabels, lastCloses); };
+window.applyEmaChanges = function() { saveEmaLines(); if (lastCloses.length) loadStockChart(currentSymbol, lastLabels, lastCloses); };
 
 function calcEMA(prices, period) {
   const k = 2 / (period + 1);
@@ -385,7 +386,10 @@ window.calculateDCA = function() {
   const years = parseInt(document.getElementById("dcaYears").value);
   const rate = parseFloat(document.getElementById("dcaReturn").value) / 100;
   const retireAge = parseInt(document.getElementById("dcaRetireAge").value);
+  const currentAge = parseInt(document.getElementById("dcaAge").value);
   const mr = rate / 12;
+
+  Storage.set("dcaSettings", { initial, monthly, years, rate: rate*100, retireAge, currentAge });
 
   let bal = initial, inv = initial;
   const bals = [initial], invs = [initial], labs = ["เริ่มต้น"];
@@ -525,29 +529,61 @@ function updateDashboard() {
 }
 
 function updateDashboardCharts() {
-  const chartOpts = (datasets, type="bar") => ({
-    type,
-    data: { labels: ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย."], datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: "top", labels: { color: "#94a3b8", font: { size: 11 }, boxWidth: 14 } } },
-      scales: {
-        x: { ticks: { color: "#4a5568", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
-        y: { ticks: { color: "#4a5568", font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } }
+  const txs = Storage.getArray("transactions");
+  const now = new Date();
+  const thaiMonths = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  const monthLabels = [], incomeData = [], expenseData = [], portData = [];
+
+  for (let m = 5; m >= 0; m--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    const mo = d.getMonth(), yr = d.getFullYear();
+    monthLabels.push(thaiMonths[mo]);
+    let inc = 0, exp = 0;
+    txs.forEach(tx => {
+      const td = new Date(tx.date);
+      if (td.getMonth() === mo && td.getFullYear() === yr) {
+        if (tx.type === "income") inc += (tx.amountTHB || 0);
+        else exp += (tx.amountTHB || 0);
       }
+    });
+    incomeData.push(inc);
+    expenseData.push(exp);
+    let pVal = 0;
+    const lastDay = new Date(yr, mo + 1, 0);
+    Storage.getArray("positions").forEach(p => {
+      if (p.type === "buy" && new Date(p.date) <= lastDay) pVal += (p.total || 0) * EXCHANGE_RATE * 1.05;
+    });
+    portData.push(pVal);
+  }
+
+  const scaleColor = { color: "#4a5568", font: { size: 10 } };
+  const gridColor = { color: "rgba(255,255,255,0.04)" };
+  const legendOpts = { display: true, position: "top", labels: { color: "#94a3b8", font: { size: 11 }, boxWidth: 14 } };
+
+  if (financeChart) financeChart.destroy();
+  financeChart = new Chart(document.getElementById("financeChart").getContext("2d"), {
+    type: "bar",
+    data: { labels: monthLabels, datasets: [
+      { label: "รายรับ (฿)", data: incomeData, backgroundColor: "rgba(34,197,94,0.7)", borderRadius: 6 },
+      { label: "รายจ่าย (฿)", data: expenseData, backgroundColor: "rgba(239,68,68,0.7)", borderRadius: 6 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: legendOpts },
+      scales: { x: { ticks: scaleColor, grid: gridColor }, y: { ticks: { ...scaleColor, callback: v => "฿"+v.toLocaleString() }, grid: gridColor } }
     }
   });
 
-  if (financeChart) financeChart.destroy();
-  financeChart = new Chart(document.getElementById("financeChart").getContext("2d"), chartOpts([
-    { label: "รายรับ", data: [5000,5200,5100,5300,5400,5500], backgroundColor: "rgba(34,197,94,0.7)", borderRadius: 6 },
-    { label: "รายจ่าย", data: [3000,3200,2900,3100,3300,3200], backgroundColor: "rgba(239,68,68,0.7)", borderRadius: 6 }
-  ]));
-
   if (portfolioChart) portfolioChart.destroy();
-  portfolioChart = new Chart(document.getElementById("portfolioChart").getContext("2d"), chartOpts([
-    { label: "มูลค่าพอร์ต", data: [10000,10500,10300,11000,11500,12000], borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,0.07)", tension: 0.4, fill: true, borderWidth: 2, pointRadius: 0 }
-  ], "line"));
+  portfolioChart = new Chart(document.getElementById("portfolioChart").getContext("2d"), {
+    type: "line",
+    data: { labels: monthLabels, datasets: [
+      { label: "มูลค่าพอร์ต (฿)", data: portData, borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,0.07)", tension: 0.4, fill: true, borderWidth: 2, pointRadius: 3 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: legendOpts },
+      scales: { x: { ticks: scaleColor, grid: gridColor }, y: { ticks: { ...scaleColor, callback: v => "฿"+v.toLocaleString() }, grid: gridColor } }
+    }
+  });
 }
 
 // ============================================
@@ -558,6 +594,20 @@ document.addEventListener("DOMContentLoaded", function() {
   document.getElementById("txDate").value = today;
   document.getElementById("posDate").value = today;
   renderEmaControls();
+
+  // Restore DCA settings
+  const savedDca = Storage.get("dcaSettings");
+  if (savedDca) {
+    try {
+      document.getElementById("dcaInitial").value = savedDca.initial || 10000;
+      document.getElementById("dcaMonthly").value = savedDca.monthly || 1000;
+      document.getElementById("dcaYears").value = savedDca.years || 30;
+      document.getElementById("dcaReturn").value = savedDca.rate || 8;
+      document.getElementById("dcaRetireAge").value = savedDca.retireAge || 65;
+      document.getElementById("dcaAge").value = savedDca.currentAge || 35;
+      calculateDCA();
+    } catch(e) {}
+  }
 
   document.getElementById("transactionForm").addEventListener("submit", function(e) {
     e.preventDefault();
