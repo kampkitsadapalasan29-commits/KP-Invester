@@ -585,35 +585,63 @@ function loadTransactions() {
 }
 
 // ============================================
-// PORTFOLIO
+// PORTFOLIO — Real prices from Finnhub
 // ============================================
-function loadHoldings() {
+async function loadHoldings() {
   const positions = Storage.getArray("positions");
   const holdings = {};
   positions.forEach(p => {
-    if (!holdings[p.symbol]) holdings[p.symbol] = { symbol: p.symbol, shares: 0, totalCost: 0 };
+    if (!holdings[p.symbol]) holdings[p.symbol] = { symbol: p.symbol, shares: 0, totalCost: 0, history: [] };
     if (p.type === "buy") { holdings[p.symbol].shares += p.shares; holdings[p.symbol].totalCost += p.total; }
     else { holdings[p.symbol].shares -= p.shares; holdings[p.symbol].totalCost -= p.total; }
+    holdings[p.symbol].history.push(p);
   });
   const items = Object.values(holdings).filter(h => h.shares > 0);
   const tbody = document.getElementById("holdingsList");
-  if (!items.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:1.5rem;">ยังไม่มีหุ้น</td></tr>'; return; }
+  if (!items.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:1.5rem;">ยังไม่มีหุ้น</td></tr>'; return; }
+
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-sub);padding:1rem;font-size:0.8rem;">⏳ กำลังโหลดราคาจริง...</td></tr>';
+
+  // Fetch real prices from Finnhub
+  const priceMap = {};
+  await Promise.all(items.map(async h => {
+    try {
+      const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${h.symbol}&token=${FH_KEY}`);
+      const d = await r.json();
+      if (d && d.c && d.c > 0) priceMap[h.symbol] = d.c;
+    } catch {}
+  }));
+
+  let totalPortVal = 0, totalPortCost = 0;
   tbody.innerHTML = items.map(h => {
     const avg = h.totalCost / h.shares;
-    const cur = avg * (1 + (Math.random() * 0.2 - 0.1));
+    const cur = priceMap[h.symbol] || avg;
     const val = h.shares * cur;
     const pl = val - h.totalCost;
     const plp = (pl / h.totalCost) * 100;
+    const realPrice = !!priceMap[h.symbol];
+    totalPortVal += val; totalPortCost += h.totalCost;
     return `<tr>
       <td><strong style="color:var(--accent)">${h.symbol}</strong></td>
       <td>${h.shares}</td>
       <td>$${avg.toFixed(2)}</td>
-      <td>$${cur.toFixed(2)}</td>
-      <td>$${val.toFixed(2)}</td>
+      <td>$${cur.toFixed(2)} ${realPrice ? '<span style="font-size:0.65rem;color:var(--success);">●live</span>' : '<span style="font-size:0.65rem;color:var(--text-dim);">~est</span>'}</td>
+      <td>$${val.toFixed(2)}<br><span style="font-size:0.68rem;color:var(--text-sub);">฿${(val*EXCHANGE_RATE).toLocaleString(undefined,{maximumFractionDigits:0})}</span></td>
       <td style="color:${pl>=0?"var(--success)":"var(--danger)"};">$${pl.toFixed(2)}</td>
       <td style="color:${pl>=0?"var(--success)":"var(--danger)"};">${plp>=0?"+":""}${plp.toFixed(2)}%</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openNoteModal('${h.symbol}')" title="Note">📝</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('stockSymbol').value='${h.symbol}';showSection('stocks',document.querySelector('[data-sec=stocks]'));searchStock();" title="วิเคราะห์">📈</button>
+      </td>
     </tr>`;
   }).join("");
+
+  // Update portfolio stats in dashboard
+  const portReturn = totalPortCost > 0 ? ((totalPortVal - totalPortCost) / totalPortCost * 100) : 0;
+  const portEl = document.getElementById("portfolioValue");
+  if (portEl) portEl.textContent = `฿${(totalPortVal*EXCHANGE_RATE).toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  const retEl = document.getElementById("portfolioReturn");
+  if (retEl) retEl.textContent = portReturn.toFixed(1);
 }
 
 // ============================================
@@ -781,5 +809,239 @@ document.addEventListener("DOMContentLoaded", function() {
 
   updateExchangeRate();
   updateDashboard();
+  renderAlerts();
+  renderCachedList();
+  initTheme();
+  requestNotificationPermission();
   setInterval(updateExchangeRate, 60000);
+  setInterval(checkAlerts, 60000); // check alerts every minute
 });
+
+// ============================================
+// NOTE MODAL
+// ============================================
+window.openNoteModal = function(symbol) {
+  const note = Storage.get("note_" + symbol) || "";
+  const modal = document.createElement("div");
+  modal.id = "noteModal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;";
+  modal.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;width:100%;max-width:480px;">
+      <div style="font-size:1rem;font-weight:700;margin-bottom:12px;color:var(--accent);">📝 Note — ${symbol}</div>
+      <textarea id="noteText" style="width:100%;height:140px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:0.875rem;resize:vertical;">${note}</textarea>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+        <button onclick="document.getElementById('noteModal').remove()" class="btn btn-outline btn-sm">ยกเลิก</button>
+        <button onclick="Storage.set('note_${symbol}',document.getElementById('noteText').value);document.getElementById('noteModal').remove();alert('บันทึกแล้ว ✓');" class="btn btn-primary btn-sm">💾 บันทึก</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+};
+
+// ============================================
+// PRICE ALERT
+// ============================================
+function getAlerts() { return Storage.getArray("priceAlerts"); }
+function saveAlerts(arr) { Storage.set("priceAlerts", arr); }
+
+window.addPriceAlert = function() {
+  const sym = document.getElementById("alertSymbol").value.trim().toUpperCase();
+  const price = parseFloat(document.getElementById("alertPrice").value);
+  const dir = document.getElementById("alertDir").value;
+  if (!sym || !price) return alert("กรุณากรอกข้อมูลให้ครบ");
+  const alerts = getAlerts();
+  alerts.push({ id: Date.now(), symbol: sym, price, direction: dir, triggered: false });
+  saveAlerts(alerts);
+  document.getElementById("alertSymbol").value = "";
+  document.getElementById("alertPrice").value = "";
+  renderAlerts();
+  alert(`✓ ตั้งแจ้งเตือน ${sym} ${dir === "below" ? "ต่ำกว่า" : "สูงกว่า"} $${price}`);
+};
+
+window.deleteAlert = function(id) {
+  saveAlerts(getAlerts().filter(a => a.id !== id));
+  renderAlerts();
+};
+
+function renderAlerts() {
+  const el = document.getElementById("alertsList");
+  if (!el) return;
+  const alerts = getAlerts();
+  if (!alerts.length) { el.innerHTML = '<div style="color:var(--text-dim);font-size:0.8rem;padding:8px;">ยังไม่มีการแจ้งเตือน</div>'; return; }
+  el.innerHTML = alerts.map(a => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div>
+        <span style="color:var(--accent);font-weight:700;">${a.symbol}</span>
+        <span style="color:var(--text-sub);font-size:0.8rem;margin-left:8px;">${a.direction === "below" ? "📉 ต่ำกว่า" : "📈 สูงกว่า"} $${a.price}</span>
+        ${a.triggered ? '<span style="color:var(--warning);font-size:0.72rem;margin-left:6px;">✓ แจ้งแล้ว</span>' : ""}
+      </div>
+      <button class="btn-remove" onclick="deleteAlert(${a.id})">✕</button>
+    </div>`).join("");
+}
+
+async function checkAlerts() {
+  const alerts = getAlerts().filter(a => !a.triggered);
+  if (!alerts.length) return;
+  const symbols = [...new Set(alerts.map(a => a.symbol))];
+  for (const sym of symbols) {
+    try {
+      const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${sym}&token=${FH_KEY}`);
+      const d = await r.json();
+      if (!d || !d.c) continue;
+      const price = d.c;
+      alerts.forEach(a => {
+        if (a.symbol !== sym) return;
+        const hit = (a.direction === "below" && price <= a.price) || (a.direction === "above" && price >= a.price);
+        if (hit) {
+          a.triggered = true;
+          if (Notification.permission === "granted") {
+            new Notification(`🔔 KP Invester — ${sym}`, { body: `ราคา $${price.toFixed(2)} ${a.direction === "below" ? "ต่ำกว่า" : "สูงกว่า"} เป้า $${a.price}` });
+          } else {
+            alert(`🔔 แจ้งเตือน: ${sym} ราคา $${price.toFixed(2)} ${a.direction === "below" ? "ต่ำกว่า" : "สูงกว่า"} เป้า $${a.price}`);
+          }
+        }
+      });
+    } catch {}
+  }
+  // update all alerts (merge triggered)
+  const all = getAlerts();
+  all.forEach(a => { const found = alerts.find(x => x.id === a.id); if (found) a.triggered = found.triggered; });
+  saveAlerts(all);
+  renderAlerts();
+}
+
+function requestNotificationPermission() {
+  if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+}
+
+// ============================================
+// EXPORT CSV / JSON
+// ============================================
+window.exportCSV = function() {
+  const txs = Storage.getArray("transactions");
+  if (!txs.length) { alert("ยังไม่มีรายการ"); return; }
+  const header = "วันที่,รายละเอียด,หมวดหมู่,ประเภท,จำนวน (฿),จำนวน (USD)";
+  const rows = txs.map(t => `${t.date},"${t.description}",${t.category},${t.type},${t.amountTHB},${t.amountUSD.toFixed(2)}`);
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `KP_Finance_${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+};
+
+window.exportPortfolioCSV = function() {
+  const positions = Storage.getArray("positions");
+  if (!positions.length) { alert("ยังไม่มีรายการ"); return; }
+  const header = "วันที่,หุ้น,ประเภท,จำนวนหุ้น,ราคา/หุ้น,ยอดรวม (USD)";
+  const rows = positions.map(p => `${p.date},${p.symbol},${p.type},${p.shares},${p.price},${p.total}`);
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `KP_Portfolio_${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+};
+
+// ============================================
+// TAX SUMMARY
+// ============================================
+function calcTaxSummary() {
+  const positions = Storage.getArray("positions");
+  const holdings = {};
+  const realized = [];
+
+  positions.forEach(p => {
+    if (!holdings[p.symbol]) holdings[p.symbol] = { shares: 0, totalCost: 0 };
+    if (p.type === "buy") {
+      holdings[p.symbol].shares += p.shares;
+      holdings[p.symbol].totalCost += p.total;
+    } else {
+      const avg = holdings[p.symbol].totalCost / holdings[p.symbol].shares;
+      const pl = (p.price - avg) * p.shares;
+      realized.push({ symbol: p.symbol, date: p.date, shares: p.shares, buyPrice: avg, sellPrice: p.price, pl });
+      holdings[p.symbol].shares -= p.shares;
+      holdings[p.symbol].totalCost -= avg * p.shares;
+    }
+  });
+
+  const el = document.getElementById("taxContent");
+  if (!el) return;
+
+  const totalPL = realized.reduce((s, r) => s + r.pl, 0);
+  const gains = realized.filter(r => r.pl > 0);
+  const losses = realized.filter(r => r.pl < 0);
+
+  if (!realized.length) {
+    el.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:1.5rem;">ยังไม่มีการขายหุ้น</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:1rem;">
+      <div class="stat-card ${totalPL>=0?"accent-green":"accent-red"}">
+        <div class="stat-label">กำไร/ขาดทุนสุทธิ</div>
+        <div class="stat-value" style="font-size:1.3rem;">$${totalPL.toFixed(2)}</div>
+        <div class="stat-change">฿${(totalPL*EXCHANGE_RATE).toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+      </div>
+      <div class="stat-card accent-gold">
+        <div class="stat-label">ภาษีประมาณ (15%)</div>
+        <div class="stat-value" style="font-size:1.3rem;">$${(Math.max(totalPL,0)*0.15).toFixed(2)}</div>
+        <div class="stat-change">เฉพาะกำไรเท่านั้น</div>
+      </div>
+    </div>
+    <div class="table-container">
+      <table>
+        <thead><tr><th>หุ้น</th><th>วันที่</th><th>จำนวน</th><th>ราคาซื้อ</th><th>ราคาขาย</th><th>กำไร/ขาดทุน</th></tr></thead>
+        <tbody>
+          ${realized.map(r => `<tr>
+            <td><strong style="color:var(--accent)">${r.symbol}</strong></td>
+            <td>${r.date}</td>
+            <td>${r.shares}</td>
+            <td>$${r.buyPrice.toFixed(2)}</td>
+            <td>$${r.sellPrice.toFixed(2)}</td>
+            <td style="color:${r.pl>=0?"var(--success)":"var(--danger)"};">$${r.pl.toFixed(2)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ============================================
+// DARK / LIGHT MODE
+// ============================================
+function initTheme() {
+  const saved = localStorage.getItem("theme") || "dark";
+  applyTheme(saved);
+}
+
+function applyTheme(theme) {
+  localStorage.setItem("theme", theme);
+  const root = document.documentElement;
+  if (theme === "light") {
+    root.style.setProperty("--bg-deep",    "#f0f4f8");
+    root.style.setProperty("--bg-card",    "#ffffff");
+    root.style.setProperty("--bg-card2",   "#f1f5f9");
+    root.style.setProperty("--bg-input",   "#e8edf2");
+    root.style.setProperty("--border",     "#d1d9e0");
+    root.style.setProperty("--text",       "#1e293b");
+    root.style.setProperty("--text-sub",   "#64748b");
+    root.style.setProperty("--text-dim",   "#94a3b8");
+    const btn = document.getElementById("themeBtn");
+    if (btn) btn.textContent = "☀️";
+  } else {
+    root.style.setProperty("--bg-deep",    "#0a0e1a");
+    root.style.setProperty("--bg-card",    "#111827");
+    root.style.setProperty("--bg-card2",   "#1a2235");
+    root.style.setProperty("--bg-input",   "#1e2d45");
+    root.style.setProperty("--border",     "#243050");
+    root.style.setProperty("--text",       "#e2e8f0");
+    root.style.setProperty("--text-sub",   "#94a3b8");
+    root.style.setProperty("--text-dim",   "#4a5568");
+    const btn = document.getElementById("themeBtn");
+    if (btn) btn.textContent = "🌙";
+  }
+}
+
+window.toggleTheme = function() {
+  const current = localStorage.getItem("theme") || "dark";
+  applyTheme(current === "dark" ? "light" : "dark");
+};

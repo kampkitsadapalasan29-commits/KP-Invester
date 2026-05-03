@@ -12,14 +12,19 @@
 <!-- TOP HEADER -->
 <header class="header">
   <div class="logo">💰 KP <span>Invester</span></div>
-  <nav class="nav-tabs">
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button id="themeBtn" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:1rem;">🌙</button>
+    <nav class="nav-tabs">
     <button class="nav-tab active" onclick="showSection('dashboard', this)">📊 Dashboard<span class="th">แดชบอร์ด</span></button>
     <button class="nav-tab" onclick="showSection('watchlist', this)">⭐ Watchlist<span class="th">หุ้นถูกใจ</span></button>
     <button class="nav-tab" onclick="showSection('stocks', this)">📈 Stocks<span class="th">หุ้น</span></button>
     <button class="nav-tab" onclick="showSection('finance', this)">💵 Finance<span class="th">การเงิน</span></button>
     <button class="nav-tab" onclick="showSection('portfolio', this)">💼 Portfolio<span class="th">พอร์ต</span></button>
     <button class="nav-tab" onclick="showSection('dca', this)">🎯 DCA</button>
+    <button class="nav-tab" onclick="showSection('alerts', this)">🔔 Alert<span class="th">แจ้งเตือน</span></button>
+    <button class="nav-tab" onclick="showSection('tax', this)">🧾 Tax<span class="th">ภาษี</span></button>
   </nav>
+  </div>
 </header>
 
 <!-- BOTTOM NAV (mobile) -->
@@ -31,6 +36,8 @@
     <button class="bnav-btn" onclick="showSection('finance', this)" data-sec="finance"><span class="icon">💵</span>การเงิน</button>
     <button class="bnav-btn" onclick="showSection('portfolio', this)" data-sec="portfolio"><span class="icon">💼</span>พอร์ต</button>
     <button class="bnav-btn" onclick="showSection('dca', this)" data-sec="dca"><span class="icon">🎯</span>DCA</button>
+    <button class="bnav-btn" onclick="showSection('alerts', this)" data-sec="alerts"><span class="icon">🔔</span>แจ้งเตือน</button>
+    <button class="bnav-btn" onclick="showSection('tax', this)" data-sec="tax"><span class="icon">🧾</span>ภาษี</button>
   </div>
 </nav>
 
@@ -235,7 +242,9 @@
     </div>
 
     <div class="card">
-      <div class="card-title">📋 รายการทั้งหมด <span class="th">All Transactions</span></div>
+      <div class="card-title">📋 รายการทั้งหมด <span class="th">All Transactions</span>
+        <button onclick="exportCSV()" class="btn btn-outline btn-sm" style="margin-left:auto;">📥 Export CSV</button>
+      </div>
       <div class="table-container">
         <table>
           <thead><tr>
@@ -292,11 +301,13 @@
       </form>
     </div>
     <div class="card">
-      <div class="card-title">📊 หุ้นที่ถืออยู่ <span class="th">Current Holdings</span></div>
+      <div class="card-title">📊 หุ้นที่ถืออยู่ <span class="th">Current Holdings</span>
+        <button onclick="exportPortfolioCSV()" class="btn btn-outline btn-sm" style="margin-left:auto;">📥 Export CSV</button>
+      </div>
       <div class="table-container">
         <table>
           <thead><tr>
-            <th>หุ้น</th><th>จำนวน</th><th>ต้นทุน/หุ้น</th><th>ราคาปัจจุบัน</th><th>มูลค่ารวม</th><th>กำไร/ขาดทุน</th><th>%</th>
+            <th>หุ้น</th><th>จำนวน</th><th>ต้นทุน/หุ้น</th><th>ราคาปัจจุบัน</th><th>มูลค่ารวม</th><th>กำไร/ขาดทุน</th><th>%</th><th></th>
           </tr></thead>
           <tbody id="holdingsList"></tbody>
         </table>
@@ -383,6 +394,47 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ ALERT ══ -->
+  <div id="alerts" class="section">
+    <div class="page-header"><h1>🔔 Price Alert <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">แจ้งเตือนราคาหุ้น</span></h1></div>
+    <div class="card">
+      <div class="card-title">➕ ตั้งการแจ้งเตือน</div>
+      <div class="grid grid-3">
+        <div class="form-group">
+          <label class="form-label">ชื่อหุ้น <span class="th">Symbol</span></label>
+          <input type="text" class="form-input" id="alertSymbol" placeholder="เช่น AAPL" style="text-transform:uppercase;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ราคาเป้าหมาย ($) <span class="th">Target Price</span></label>
+          <input type="number" class="form-input" id="alertPrice" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">เงื่อนไข <span class="th">Condition</span></label>
+          <select class="form-select" id="alertDir">
+            <option value="below">📉 ต่ำกว่า (Below)</option>
+            <option value="above">📈 สูงกว่า (Above)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addPriceAlert()">🔔 ตั้งการแจ้งเตือน</button>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 รายการแจ้งเตือน</div>
+      <div id="alertsList"></div>
+    </div>
+  </div>
+
+  <!-- ══ TAX ══ -->
+  <div id="tax" class="section">
+    <div class="page-header"><h1>🧾 Tax Summary <span style="color:var(--text-sub);font-size:0.8rem;font-weight:400;">สรุปภาษีหุ้น</span></h1></div>
+    <div class="card">
+      <div class="card-title">🧾 สรุปกำไร/ขาดทุนจากการขายหุ้น</div>
+      <p style="font-size:0.78rem;color:var(--text-sub);margin-bottom:12px;">คำนวณจากรายการขายหุ้นในหน้า Portfolio · ภาษีประมาณ 15% บนกำไรสุทธิ (ปรึกษาผู้เชี่ยวชาญด้านภาษีสำหรับข้อมูลที่ถูกต้อง)</p>
+      <button class="btn btn-primary" onclick="calcTaxSummary()">🧮 คำนวณ</button>
+      <div id="taxContent" style="margin-top:1rem;"></div>
     </div>
   </div>
 
