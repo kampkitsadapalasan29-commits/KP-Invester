@@ -52,6 +52,23 @@ window.showSection = function(sectionId, el) {
 const AV_KEY = "EF98OLFV7JF7WTQD";
 const FH_KEY = "d7qu6ohr01qudminhhpgd7qu6ohr01qudminhhq0";
 let watchCache = {};
+let logoCache = {};
+
+// ดึงโลโก้บริษัทจาก Finnhub (ฟรี ไม่กิน quota)
+async function getStockLogo(symbol) {
+  if (logoCache[symbol] !== undefined) return logoCache[symbol];
+  try {
+    const r = await fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FH_KEY}`);
+    const d = await r.json();
+    logoCache[symbol] = (d && d.logo) ? d.logo : null;
+    return logoCache[symbol];
+  } catch { logoCache[symbol] = null; return null; }
+}
+
+function logoImg(url, size=24) {
+  if (!url) return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;background:var(--bg-card2);border-radius:50%;font-size:${size*0.5}px;">📈</span>`;
+  return `<img src="${url}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:contain;background:#fff;vertical-align:middle;" onerror="this.style.display='none'">`;
+}
 
 function getFavorites() { return Storage.getArray("favorites"); }
 function saveFavorites(arr) { Storage.set("favorites", arr); }
@@ -103,31 +120,40 @@ async function renderWatchlist() {
 
   tickerWrap.style.display = "block";
 
+  // Fetch prices + logos in parallel
   const results = await Promise.all(favs.map(async sym => {
-    try { return { sym, data: await fetchStockPrice(sym) }; }
-    catch { return { sym, data: null }; }
+    try {
+      const [data, logo] = await Promise.all([fetchStockPrice(sym), getStockLogo(sym)]);
+      return { sym, data, logo };
+    } catch { return { sym, data: null, logo: null }; }
   }));
 
+  // Ticker bar with logos
   ticker.innerHTML = results.map(r => {
-    if (!r.data) return `<div class="ticker-item"><div class="ticker-sym">${r.sym}</div><div class="ticker-price" style="color:var(--text-dim)">—</div></div>`;
+    const logo = r.logo ? `<img src="${r.logo}" style="width:20px;height:20px;border-radius:50%;object-fit:contain;background:#fff;margin-bottom:2px;" onerror="this.style.display='none'">` : "";
+    if (!r.data) return `<div class="ticker-item"><div>${logo}</div><div class="ticker-sym">${r.sym}</div><div class="ticker-price" style="color:var(--text-dim)">—</div></div>`;
     const up = r.data.change >= 0;
     return `<div class="ticker-item" onclick="quickSearch('${r.sym}')">
+      <div style="text-align:center;">${logo}</div>
       <div class="ticker-sym">${r.sym}</div>
       <div class="ticker-price">$${r.data.price.toFixed(2)}</div>
       <div class="ticker-chg ${up?'up':'dn'}">${up?'+':''}${r.data.change.toFixed(2)} (${r.data.changePct.toFixed(2)}%)</div>
     </div>`;
   }).join("");
 
+  // Table with logos
   const rows = results.map(r => {
+    const logoHtml = logoImg(r.logo, 28);
+    const symCell = `<div style="display:flex;align-items:center;gap:8px;">${logoHtml}<strong style="color:var(--accent)">${r.sym}</strong></div>`;
     if (!r.data) return `<tr>
-      <td><strong style="color:var(--accent)">${r.sym}</strong></td>
-      <td colspan="4" style="color:var(--text-dim);font-size:0.78rem;">⚠️ ดึงข้อมูลไม่ได้ (API limit หรือไม่พบหุ้น)</td>
+      <td>${symCell}</td>
+      <td colspan="4" style="color:var(--text-dim);font-size:0.78rem;">⚠️ ดึงข้อมูลไม่ได้</td>
       <td><button class="btn btn-outline btn-sm" onclick="quickSearch('${r.sym}')">📈</button></td>
       <td><button class="btn btn-danger btn-sm" onclick="removeFromWatchlist('${r.sym}')">ลบ</button></td>
     </tr>`;
     const up = r.data.change >= 0;
     return `<tr>
-      <td><strong style="color:var(--accent)">${r.sym}</strong></td>
+      <td>${symCell}</td>
       <td style="font-weight:700;">$${r.data.price.toFixed(2)}</td>
       <td style="color:${up?'var(--bull)':'var(--bear)'};">${up?'+':''}${r.data.change.toFixed(2)}</td>
       <td style="color:${up?'var(--bull)':'var(--bear)'};">${up?'+':''}${r.data.changePct.toFixed(2)}%</td>
@@ -286,6 +312,12 @@ function renderStockFromData(symbol, closes, volumes, labels, currentPrice, curr
     ? `<span style="font-size:0.68rem;background:rgba(251,191,36,0.15);color:#fbbf24;padding:2px 8px;border-radius:10px;margin-left:8px;">💾 แคชไว้ ${new Date(cacheDate).toLocaleDateString("th-TH")}</span>`
     : `<span style="font-size:0.68rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:10px;margin-left:8px;">🔄 ข้อมูลใหม่</span>`;
 
+  // Add logo to stock header
+  getStockLogo(symbol).then(logo => {
+    const logoHtml = logoImg(logo, 32);
+    document.getElementById("stockName").innerHTML =
+      `<span style="display:flex;align-items:center;gap:10px;">${logoHtml}<span style="color:var(--accent)">${symbol}</span> — ข้อมูลหุ้น ${cacheTag}</span>`;
+  });
   document.getElementById("stockName").innerHTML =
     `<span style="color:var(--accent)">${symbol}</span> — ข้อมูลหุ้น ${cacheTag}`;
   document.getElementById("stockPrice").textContent = `$${latest.toFixed(2)}`;
@@ -602,13 +634,15 @@ async function loadHoldings() {
 
   tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-sub);padding:1rem;font-size:0.8rem;">⏳ กำลังโหลดราคาจริง...</td></tr>';
 
-  // Fetch real prices from Finnhub
+  // Fetch real prices + logos from Finnhub in parallel
   const priceMap = {};
   await Promise.all(items.map(async h => {
     try {
-      const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${h.symbol}&token=${FH_KEY}`);
-      const d = await r.json();
-      if (d && d.c && d.c > 0) priceMap[h.symbol] = d.c;
+      const [quote, logo] = await Promise.all([
+        fetch(`https://finnhub.io/api/v1/quote?symbol=${h.symbol}&token=${FH_KEY}`).then(r=>r.json()),
+        getStockLogo(h.symbol)
+      ]);
+      if (quote && quote.c && quote.c > 0) priceMap[h.symbol] = quote.c;
     } catch {}
   }));
 
@@ -621,8 +655,10 @@ async function loadHoldings() {
     const plp = (pl / h.totalCost) * 100;
     const realPrice = !!priceMap[h.symbol];
     totalPortVal += val; totalPortCost += h.totalCost;
+    const logo = logoCache[h.symbol] || null;
+    const symCell = `<div style="display:flex;align-items:center;gap:8px;">${logoImg(logo,28)}<strong style="color:var(--accent)">${h.symbol}</strong></div>`;
     return `<tr>
-      <td><strong style="color:var(--accent)">${h.symbol}</strong></td>
+      <td>${symCell}</td>
       <td>${h.shares}</td>
       <td>$${avg.toFixed(2)}</td>
       <td>$${cur.toFixed(2)} ${realPrice ? '<span style="font-size:0.65rem;color:var(--success);">●live</span>' : '<span style="font-size:0.65rem;color:var(--text-dim);">~est</span>'}</td>
