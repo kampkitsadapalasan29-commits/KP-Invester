@@ -3,7 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>KP Invester</title>
+  <title>KP Invest</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3b82f6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KP Invest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="description" content="ติดตามหุ้น วิเคราะห์ และบริหารพอร์ตการลงทุน">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
   <link rel="stylesheet" href="./style.css">
 </head>
@@ -681,6 +688,16 @@
     updateBgBtns();
   },200);
 })();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js")
+      .then(r => console.log("SW registered"))
+      .catch(e => console.log("SW error:", e));
+  });
+}
 </script>
 </body>
 </html>
