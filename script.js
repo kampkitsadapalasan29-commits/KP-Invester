@@ -957,6 +957,102 @@ window.autoCalcValuation = async function() {
   }
 };
 
+
+// ============================================
+// FIREBASE AUTH + SYNC
+// ============================================
+let currentUser = null;
+let syncListeners = [];
+
+window._initFirebaseAuth = function() {
+  if (!window._fbOnAuth) return;
+  window._fbOnAuth(async user => {
+    currentUser = user;
+    updateAuthUI(user);
+    if (user) {
+      await loadFromFirebase(user.uid);
+      setupRealtimeSync(user.uid);
+    } else {
+      // Cleanup listeners
+      syncListeners.forEach(u => u());
+      syncListeners = [];
+    }
+  });
+};
+
+function updateAuthUI(user) {
+  const label = document.getElementById("authLabel");
+  const avatar = document.getElementById("authAvatar");
+  if (!label) return;
+  if (user) {
+    label.textContent = user.displayName || user.email;
+    label.style.color = "var(--success)";
+    if (user.photoURL) { avatar.src = user.photoURL; avatar.style.display = "block"; }
+  } else {
+    label.textContent = "🔑 Login Google";
+    label.style.color = "var(--text-sub)";
+    avatar.style.display = "none";
+  }
+}
+
+window.handleAuth = async function() {
+  if (!window._fbSignIn) return alert("Firebase ยังไม่พร้อม");
+  if (currentUser) {
+    if (confirm("ออกจากระบบ?")) await window._fbSignOut();
+  } else {
+    try { await window._fbSignIn(); }
+    catch(e) { if (e.code !== "auth/popup-closed-by-user") alert("Login ไม่สำเร็จ: " + e.message); }
+  }
+};
+
+// Keys to sync
+const SYNC_KEYS = ["transactions", "positions", "favorites", "emaLines", "dcaSettings", "stockcache_list", "priceAlerts"];
+
+async function loadFromFirebase(uid) {
+  if (!window._fbLoad) return;
+  for (const key of SYNC_KEYS) {
+    try {
+      const val = await window._fbLoad(uid, key);
+      if (val !== null) localStorage.setItem(key, JSON.stringify(val));
+    } catch(e) {}
+  }
+  // Also load stockcaches
+  const list = Storage.getArray("stockcache_list");
+  for (const sym of list) {
+    try {
+      const val = await window._fbLoad(uid, "stockcache_" + sym);
+      if (val) localStorage.setItem("stockcache_" + sym, JSON.stringify(val));
+    } catch(e) {}
+  }
+  updateDashboard();
+  loadTransactions();
+}
+
+function setupRealtimeSync(uid) {
+  if (!window._fbListen) return;
+  SYNC_KEYS.forEach(key => {
+    const unsub = window._fbListen(uid, key, val => {
+      localStorage.setItem(key, JSON.stringify(val));
+      if (key === "transactions") { loadTransactions(); updateDashboard(); }
+      if (key === "positions") { loadHoldings(); updateDashboard(); }
+      if (key === "favorites") renderWatchlist();
+    });
+    syncListeners.push(unsub);
+  });
+}
+
+// Override Storage.set to also sync to Firebase
+const _origSet = Storage.set.bind(Storage);
+Storage.set = function(key, value) {
+  _origSet(key, value);
+  if (currentUser && window._fbSave && SYNC_KEYS.includes(key)) {
+    window._fbSave(currentUser.uid, key, value).catch(()=>{});
+  }
+  if (currentUser && window._fbSave && key.startsWith("stockcache_")) {
+    window._fbSave(currentUser.uid, key, value).catch(()=>{});
+  }
+};
+
 // ============================================
 // STOCK VALUATION — Graham · DCF · P/E Based
 // ============================================

@@ -14,6 +14,10 @@
 <header class="header" style="position:sticky;top:0;z-index:200;">
   <div class="logo">💰 KP <span>Invester</span></div>
   <div style="display:flex;align-items:center;gap:8px;">
+    <div id="authBtn" onclick="handleAuth()" style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:5px 12px;">
+      <img id="authAvatar" src="" style="width:24px;height:24px;border-radius:50%;display:none;">
+      <span id="authLabel" style="font-size:0.78rem;color:var(--text-sub);">🔑 Login</span>
+    </div>
     <button id="themeBtn" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:1rem;">🌙</button>
     <nav class="nav-tabs">
     <button class="nav-tab active" onclick="showSection('dashboard', this)">📊 Dashboard<span class="th">แดชบอร์ด</span></button>
@@ -515,6 +519,55 @@
   </div>
 
 </div><!-- /container -->
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCccfQ0zM6V81EwnDGhnp0-bbedkxHJG-k",
+    authDomain: "kp-investment.firebaseapp.com",
+    projectId: "kp-investment",
+    storageBucket: "kp-investment.firebasestorage.app",
+    messagingSenderId: "276313432810",
+    appId: "1:276313432810:web:df1d34f7c3562667fc6d93",
+    measurementId: "G-6ECCWQWBEG"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  // ── AUTH STATE ──
+  window._fbAuth = auth;
+  window._fbDb = db;
+  window._fbProvider = provider;
+  window._fbSignIn = () => signInWithPopup(auth, provider);
+  window._fbSignOut = () => signOut(auth);
+  window._fbOnAuth = (cb) => onAuthStateChanged(auth, cb);
+
+  // ── FIRESTORE HELPERS ──
+  window._fbSave = async (uid, key, value) => {
+    await setDoc(doc(db, "users", uid, "data", key), { value: JSON.stringify(value) }, { merge: true });
+  };
+  window._fbLoad = async (uid, key) => {
+    const snap = await getDoc(doc(db, "users", uid, "data", key));
+    if (snap.exists()) return JSON.parse(snap.data().value);
+    return null;
+  };
+  window._fbListen = (uid, key, cb) => {
+    return onSnapshot(doc(db, "users", uid, "data", key), snap => {
+      if (snap.exists()) cb(JSON.parse(snap.data().value));
+    });
+  };
+
+  // Init auth listener after script.js loads
+  window.addEventListener("load", () => {
+    if (window._initFirebaseAuth) window._initFirebaseAuth();
+  });
+</script>
 <script src="./script.js"></script>
 <script>
 // ── BACKGROUND ENGINE — Particle Network + Gradient Wave (switchable) ──
