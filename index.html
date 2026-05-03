@@ -453,59 +453,60 @@
     </div>
 
     <div class="card">
-      <div class="card-title">📝 กรอกข้อมูลหุ้น <span class="th">Stock Fundamentals</span></div>
-      <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:14px;">💡 หาข้อมูลได้ฟรีจาก <a href="https://finance.yahoo.com" target="_blank" style="color:var(--accent);">Yahoo Finance</a> · <a href="https://stockanalysis.com" target="_blank" style="color:var(--accent);">StockAnalysis</a> · <a href="https://www.macrotrends.net" target="_blank" style="color:var(--accent);">Macrotrends</a></p>
-      <div class="grid grid-2">
-        <div class="form-group">
-          <label class="form-label">ชื่อหุ้น <span class="th">Symbol</span></label>
-          <input type="text" class="form-input" id="valSymbol" placeholder="เช่น AAPL" style="text-transform:uppercase;">
-        </div>
-        <div class="form-group">
-          <label class="form-label">ราคาปัจจุบัน ($) <span class="th">Current Price</span></label>
-          <input type="number" class="form-input" id="valPrice" step="0.01" placeholder="0.00">
-        </div>
-        <div class="form-group">
-          <label class="form-label">EPS — กำไรต่อหุ้น ($) <span class="th">Earnings Per Share</span></label>
-          <input type="number" class="form-input" id="valEPS" step="0.01" placeholder="0.00">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Book Value ต่อหุ้น ($) <span class="th">Book Value Per Share</span></label>
-          <input type="number" class="form-input" id="valBV" step="0.01" placeholder="0.00">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Free Cash Flow ต่อหุ้น ($) <span class="th">FCF Per Share</span></label>
-          <input type="number" class="form-input" id="valFCF" step="0.01" placeholder="0.00">
-        </div>
-        <div class="form-group">
-          <label class="form-label">อัตราเติบโต % ต่อปี <span class="th">Growth Rate (5yr)</span></label>
-          <input type="number" class="form-input" id="valGrowth" step="0.1" value="10" placeholder="10">
-        </div>
-        <div class="form-group">
-          <label class="form-label">P/E ของอุตสาหกรรม <span class="th">Industry P/E</span></label>
-          <input type="number" class="form-input" id="valIndustryPE" step="0.1" value="25" placeholder="25">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Discount Rate % <span class="th">Required Return Rate</span></label>
-          <input type="number" class="form-input" id="valDiscount" step="0.1" value="10" placeholder="10">
-        </div>
+      <div class="card-title">🔍 ค้นหาและคำนวณอัตโนมัติ</div>
+      <p style="font-size:0.75rem;color:var(--text-sub);margin-bottom:12px;">ดึงข้อมูล Fundamental จาก Yahoo Finance แล้วคำนวณให้เลย ไม่ต้องกรอกเอง</p>
+      <div class="search-bar" style="margin-bottom:10px;">
+        <input type="text" class="form-input" id="valSymbol" placeholder="เช่น AAPL, MSFT, TSLA" style="text-transform:uppercase;">
+        <button class="btn btn-primary" onclick="autoCalcValuation()">🔍 ดึงข้อมูลอัตโนมัติ + คำนวณ</button>
       </div>
-      <button class="btn btn-primary btn-full" onclick="calcValuation()" style="margin-top:4px;">💎 คำนวณมูลค่าที่แท้จริง</button>
+      <div id="valFetchedInfo" style="display:none;background:var(--bg-card2);border-radius:10px;padding:10px;margin-bottom:10px;"></div>
+
+      <!-- Manual override -->
+      <details style="margin-top:8px;">
+        <summary style="font-size:0.78rem;color:var(--text-sub);cursor:pointer;padding:4px 0;">⚙️ แก้ไขข้อมูลเองหรือกรอกแมนนวล</summary>
+        <div style="margin-top:10px;">
+          <div class="grid grid-2">
+            <div class="form-group">
+              <label class="form-label">ราคาปัจจุบัน ($)</label>
+              <input type="number" class="form-input" id="valPrice" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">EPS (กำไรต่อหุ้น $)</label>
+              <input type="number" class="form-input" id="valEPS" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Book Value ต่อหุ้น ($)</label>
+              <input type="number" class="form-input" id="valBV" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Free Cash Flow ต่อหุ้น ($)</label>
+              <input type="number" class="form-input" id="valFCF" step="0.01" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label class="form-label">อัตราเติบโต % ต่อปี</label>
+              <input type="number" class="form-input" id="valGrowth" step="0.1" value="10">
+            </div>
+            <div class="form-group">
+              <label class="form-label">P/E ของอุตสาหกรรม</label>
+              <input type="number" class="form-input" id="valIndustryPE" step="0.1" value="25">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Discount Rate %</label>
+              <input type="number" class="form-input" id="valDiscount" step="0.1" value="10">
+            </div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="calcValuation()">🧮 คำนวณจากข้อมูลที่กรอก</button>
+        </div>
+      </details>
     </div>
 
     <div id="valResult" style="display:none;">
-      <!-- Summary verdict -->
       <div id="valVerdict" class="card" style="border-width:2px;"></div>
-
-      <!-- 3 method cards -->
       <div class="grid grid-3" id="valMethodCards" style="margin-bottom:1rem;"></div>
-
-      <!-- Detail explanation -->
       <div class="card">
         <div class="card-title">📖 อธิบายผลการคำนวณ</div>
         <div id="valExplain" style="font-size:0.82rem;line-height:1.9;color:var(--text-sub);"></div>
       </div>
-
-      <!-- Margin of Safety -->
       <div class="card">
         <div class="card-title">🛡️ Margin of Safety <span class="th">ส่วนเผื่อความปลอดภัย</span></div>
         <div id="valMOS" style="font-size:0.82rem;line-height:1.9;"></div>

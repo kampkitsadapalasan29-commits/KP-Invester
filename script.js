@@ -868,6 +868,95 @@ function renderNews(articles) {
 }
 
 
+
+// ============================================
+// VALUATION — Auto fetch from Yahoo Finance via proxy
+// ============================================
+let valFundCache = {};
+
+async function fetchFundamentals(symbol) {
+  if (valFundCache[symbol] && Date.now() - valFundCache[symbol]._ts < 24*60*60*1000) {
+    return valFundCache[symbol];
+  }
+  // Use Yahoo Finance via allorigins proxy (free, no key)
+  const url = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=defaultKeyStatistics,financialData,summaryDetail,incomeStatementHistory`)}`;
+  const r = await fetch(url);
+  const raw = await r.json();
+  const data = JSON.parse(raw.contents);
+  const result = data?.quoteSummary?.result?.[0];
+  if (!result) throw new Error("ไม่พบข้อมูล");
+
+  const fin  = result.financialData || {};
+  const stat = result.defaultKeyStatistics || {};
+  const sum  = result.summaryDetail || {};
+  const inc  = result.incomeStatementHistory?.incomeStatementHistory?.[0] || {};
+
+  // Extract fundamentals
+  const price        = fin.currentPrice?.raw || 0;
+  const eps          = stat.trailingEps?.raw || 0;
+  const bv           = stat.bookValue?.raw || 0;
+  const fcfPerShare  = fin.freeCashflow?.raw && stat.sharesOutstanding?.raw
+                       ? fin.freeCashflow.raw / stat.sharesOutstanding.raw : 0;
+  const growth       = fin.earningsGrowth?.raw ? fin.earningsGrowth.raw * 100
+                       : fin.revenueGrowth?.raw ? fin.revenueGrowth.raw * 100 : 10;
+  const peRatio      = sum.trailingPE?.raw || 0;
+  const forwardPE    = sum.forwardPE?.raw || 0;
+  const pbRatio      = stat.priceToBook?.raw || 0;
+  const roe          = fin.returnOnEquity?.raw ? (fin.returnOnEquity.raw * 100) : 0;
+  const debtToEquity = fin.debtToEquity?.raw || 0;
+  const sector       = result.summaryDetail?.sector || "";
+
+  const out = { price, eps, bv, fcfPerShare, growth, peRatio, forwardPE, pbRatio, roe, debtToEquity, _ts: Date.now() };
+  valFundCache[symbol] = out;
+  return out;
+}
+
+window.autoCalcValuation = async function() {
+  const sym = document.getElementById("valSymbol").value.trim().toUpperCase();
+  if (!sym) return alert("กรุณากรอกชื่อหุ้น");
+
+  const btn = document.querySelector("#valuation .btn-primary");
+  btn.textContent = "⏳ กำลังดึงข้อมูล...";
+  btn.disabled = true;
+
+  try {
+    const f = await fetchFundamentals(sym);
+
+    // Fill inputs
+    document.getElementById("valPrice").value   = f.price.toFixed(2);
+    document.getElementById("valEPS").value     = f.eps.toFixed(2);
+    document.getElementById("valBV").value      = f.bv.toFixed(2);
+    document.getElementById("valFCF").value     = f.fcfPerShare.toFixed(2);
+    document.getElementById("valGrowth").value  = Math.min(Math.max(f.growth, 2), 30).toFixed(1);
+    if (f.peRatio > 0) document.getElementById("valIndustryPE").value = f.peRatio.toFixed(1);
+
+    // Show fetched data summary
+    const infoEl = document.getElementById("valFetchedInfo");
+    if (infoEl) {
+      infoEl.style.display = "block";
+      infoEl.innerHTML = `
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${f.price     ? `<span class="val-chip">💰 Price $${f.price.toFixed(2)}</span>` : ""}
+          ${f.eps       ? `<span class="val-chip">📊 EPS $${f.eps.toFixed(2)}</span>` : ""}
+          ${f.bv        ? `<span class="val-chip">📚 BV $${f.bv.toFixed(2)}</span>` : ""}
+          ${f.fcfPerShare ? `<span class="val-chip">💸 FCF/Share $${f.fcfPerShare.toFixed(2)}</span>` : ""}
+          ${f.peRatio   ? `<span class="val-chip">📈 P/E ${f.peRatio.toFixed(1)}</span>` : ""}
+          ${f.roe       ? `<span class="val-chip">🏆 ROE ${f.roe.toFixed(1)}%</span>` : ""}
+          ${f.growth    ? `<span class="val-chip">📉 Growth ${f.growth.toFixed(1)}%</span>` : ""}
+        </div>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:6px;">✅ ดึงข้อมูลจาก Yahoo Finance อัตโนมัติ · แก้ไขได้ด้านบน</div>`;
+    }
+
+    calcValuation();
+  } catch(err) {
+    console.error(err);
+    alert(`ดึงข้อมูล ${sym} ไม่ได้ครับ อาจเป็นเพราะ:\n• ชื่อหุ้นไม่ถูกต้อง\n• Yahoo Finance บล็อก proxy ชั่วคราว\n\nลองกรอกข้อมูลเองแทนได้ครับ`);
+  } finally {
+    btn.textContent = "🔍 ดึงข้อมูลอัตโนมัติ + คำนวณ";
+    btn.disabled = false;
+  }
+};
+
 // ============================================
 // STOCK VALUATION — Graham · DCF · P/E Based
 // ============================================
