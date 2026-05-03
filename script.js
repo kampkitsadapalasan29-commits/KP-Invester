@@ -354,6 +354,8 @@ function renderStockFromData(symbol, closes, volumes, labels, currentPrice, curr
     loadStockChart(symbol, labels, closes);
     loadRsiChart(labels, rsiVals);
   }
+  // โหลดข่าวพร้อมกราฟ (async ไม่ block UI)
+  loadStockNews(symbol);
 }
 
 async function fetchAndRenderStock(symbol) {
@@ -768,6 +770,101 @@ function updateDashboardCharts() {
       scales: { x: { ticks: scaleColor, grid: gridColor }, y: { ticks: { ...scaleColor, callback: v => "฿"+v.toLocaleString() }, grid: gridColor } }
     }
   });
+}
+
+
+// ============================================
+// NEWS — Finnhub + Google Translate (ฟรี ไม่ต้อง Key)
+// ============================================
+let newsCache = {}; // symbol -> { articles, _ts }
+
+async function translateTH(text) {
+  if (!text) return "";
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=th&dt=t&q=${encodeURIComponent(text)}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    return d[0].map(x => x[0]).join("") || text;
+  } catch { return text; }
+}
+
+function sentimentLabel(score) {
+  if (score > 0.1)  return { cls: "sent-positive", label: "📈 บวก" };
+  if (score < -0.1) return { cls: "sent-negative", label: "📉 ลบ" };
+  return { cls: "sent-neutral", label: "⚪ กลาง" };
+}
+
+async function loadStockNews(symbol) {
+  const el = document.getElementById("stockNews");
+  if (!el) return;
+
+  // Check cache (max 6h)
+  const cached = newsCache[symbol];
+  if (cached && Date.now() - cached._ts < 6 * 60 * 60 * 1000) {
+    renderNews(cached.articles);
+    return;
+  }
+
+  el.innerHTML = '<div style="color:var(--text-sub);font-size:0.8rem;text-align:center;padding:1rem;">⏳ กำลังโหลดข่าวและแปลภาษา...</div>';
+
+  try {
+    const to = Math.floor(Date.now() / 1000);
+    const from = to - 7 * 24 * 3600; // 7 days back
+    const url = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${new Date(from*1000).toISOString().split("T")[0]}&to=${new Date(to*1000).toISOString().split("T")[0]}&token=${FH_KEY}`;
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (!data || !data.length) {
+      el.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem;text-align:center;padding:1rem;">ไม่พบข่าวในช่วง 7 วันที่ผ่านมา</div>';
+      return;
+    }
+
+    // Take top 6 news
+    const top = data.slice(0, 6);
+
+    // Translate headlines + summaries in parallel (batch)
+    const translated = await Promise.all(top.map(async n => {
+      const [headlineTH, summaryTH] = await Promise.all([
+        translateTH(n.headline),
+        translateTH(n.summary ? n.summary.slice(0, 200) : "")
+      ]);
+      return { ...n, headlineTH, summaryTH };
+    }));
+
+    newsCache[symbol] = { articles: translated, _ts: Date.now() };
+    renderNews(translated);
+
+  } catch (err) {
+    console.error(err);
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem;text-align:center;padding:1rem;">ดึงข่าวไม่ได้ในขณะนี้</div>';
+  }
+}
+
+function renderNews(articles) {
+  const el = document.getElementById("stockNews");
+  if (!el) return;
+  if (!articles || !articles.length) {
+    el.innerHTML = '<div style="color:var(--text-dim);font-size:0.82rem;text-align:center;padding:1rem;">ไม่มีข่าว</div>';
+    return;
+  }
+
+  el.innerHTML = articles.map(n => {
+    const sent = sentimentLabel(n.sentiment || 0);
+    const date = new Date(n.datetime * 1000).toLocaleDateString("th-TH", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+    return `
+      <div class="news-item">
+        <div class="news-headline">
+          <a href="${n.url}" target="_blank" rel="noopener">${n.headlineTH || n.headline}</a>
+        </div>
+        ${n.headlineTH !== n.headline ? `<div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:4px;">${n.headline}</div>` : ""}
+        ${n.summaryTH ? `<div class="news-summary">${n.summaryTH}</div>` : ""}
+        <div class="news-meta">
+          <span class="news-source">${n.source}</span>
+          <span class="news-date">${date}</span>
+          <span class="news-sentiment ${sent.cls}">${sent.label}</span>
+        </div>
+      </div>`;
+  }).join("");
 }
 
 // ============================================
