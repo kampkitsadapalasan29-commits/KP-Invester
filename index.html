@@ -133,7 +133,9 @@
       <div class="search-bar">
         <input type="text" class="form-input" id="stockSymbol" placeholder="เช่น AAPL, META, TSLA, GOOGL" style="text-transform:uppercase;">
         <button class="btn btn-primary" onclick="searchStock()">ค้นหา</button>
+        <button class="btn btn-outline" onclick="refreshStock()" title="อัปเดตข้อมูลใหม่ (ใช้ quota 1 ครั้ง)" style="white-space:nowrap;">🔄 อัปเดต</button>
       </div>
+      <div id="cachedStocksList" style="margin-top:10px;"></div>
     </div>
 
     <div class="card">

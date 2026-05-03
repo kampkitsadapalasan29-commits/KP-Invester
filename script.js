@@ -43,6 +43,7 @@ window.showSection = function(sectionId, el) {
   if (sectionId === "finance") loadTransactions();
   if (sectionId === "portfolio") loadHoldings();
   if (sectionId === "watchlist") renderWatchlist();
+  if (sectionId === "stocks") renderCachedList();
 };
 
 // ============================================
@@ -253,98 +254,190 @@ function getRsiInfo(rsi) {
   return { text: "Neutral — ปกติ", cls: "rsi-neutral" };
 }
 
-window.searchStock = async function() {
+// ── STOCK CACHE ──────────────────────────────
+function getStockCache(symbol) {
+  return Storage.get("stockcache_" + symbol);
+}
+function setStockCache(symbol, payload) {
+  Storage.set("stockcache_" + symbol, { ...payload, _saved: Date.now() });
+}
+function getCacheList() {
+  return Storage.getArray("stockcache_list");
+}
+function addToCacheList(symbol) {
+  const list = getCacheList();
+  if (!list.includes(symbol)) { list.push(symbol); Storage.set("stockcache_list", list); }
+}
+
+function renderStockFromData(symbol, closes, volumes, labels, currentPrice, currentChange, currentChangePct, fromCache, cacheDate) {
+  lastCloses = closes; lastLabels = labels;
+
+  const latest = currentPrice || (closes.length ? closes[closes.length - 1] : 0);
+  const prev = closes.length >= 2 ? closes[closes.length - 2] : latest;
+  const change = currentChange !== null ? currentChange : (latest - prev);
+  const changePct = currentChangePct !== null ? currentChangePct : ((change / (prev||1)) * 100);
+  const rsiVals = closes.length > 15 ? calcRSI(closes) : [];
+  const latestRsi = rsiVals.length ? rsiVals[rsiVals.length - 1] : null;
+  const { supports, resistances } = closes.length ? calcSupportResistance(closes) : { supports: [], resistances: [] };
+  const rsiInfo = latestRsi !== null ? getRsiInfo(latestRsi) : { text: "ต้องการข้อมูลกราฟ", cls: "rsi-neutral" };
+
+  // แสดงสถานะ cache
+  const cacheTag = fromCache
+    ? `<span style="font-size:0.68rem;background:rgba(251,191,36,0.15);color:#fbbf24;padding:2px 8px;border-radius:10px;margin-left:8px;">💾 แคชไว้ ${new Date(cacheDate).toLocaleDateString("th-TH")}</span>`
+    : `<span style="font-size:0.68rem;background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:10px;margin-left:8px;">🔄 ข้อมูลใหม่</span>`;
+
+  document.getElementById("stockName").innerHTML =
+    `<span style="color:var(--accent)">${symbol}</span> — ข้อมูลหุ้น ${cacheTag}`;
+  document.getElementById("stockPrice").textContent = `$${latest.toFixed(2)}`;
+  const chgEl = document.getElementById("stockChange");
+  chgEl.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)} (${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%)`;
+  chgEl.style.color = change >= 0 ? "var(--bull)" : "var(--bear)";
+  document.getElementById("stockVolume").textContent = volumes.length ? volumes[volumes.length-1].toLocaleString() : "—";
+  document.getElementById("stockRsi").textContent = latestRsi !== null ? latestRsi.toFixed(1) : "—";
+  document.getElementById("stockRsi").style.color = latestRsi >= 70 ? "var(--danger)" : latestRsi <= 30 ? "var(--success)" : "var(--text)";
+  document.getElementById("rsiZone").innerHTML = `<span class="rsi-zone ${rsiInfo.cls}">${rsiInfo.text}</span>`;
+
+  const emaVals = closes.length ? emaLines.map(e => ({ period: e.period, val: calcEMA(closes, e.period).slice(-1)[0] })) : [];
+  const srBadges = [
+    ...resistances.map(r => `<span class="sr-badge sr-resistance">แนวต้าน $${r.toFixed(2)}</span>`),
+    ...supports.map(s => `<span class="sr-badge sr-support">แนวรับ $${s.toFixed(2)}</span>`)
+  ].join("");
+  document.getElementById("srBadges").innerHTML = srBadges || '<span style="color:var(--text-dim);font-size:0.78rem;">ไม่มีข้อมูลกราฟ</span>';
+
+  let signal = "";
+  if (latestRsi !== null) {
+    if (latestRsi <= 30 && supports.length && latest <= supports[0] * 1.02) signal = "🟢 <b>สัญญาณซื้อ:</b> RSI Oversold + ใกล้แนวรับ";
+    else if (latestRsi >= 70 && resistances.length && latest >= resistances[0] * 0.98) signal = "🔴 <b>สัญญาณขาย:</b> RSI Overbought + ใกล้แนวต้าน";
+    else signal = "⚪ <b>สัญญาณ:</b> รอดูท่าที (Neutral)";
+  } else { signal = "⚪ ไม่มีข้อมูลกราฟเพียงพอสำหรับวิเคราะห์"; }
+  const emaAnalysis = emaVals.map(e => `📉 EMA${e.period}: $${e.val.toFixed(2)} — ราคา${latest > e.val ? "เหนือ (Bullish 📈)" : "ต่ำกว่า (Bearish 📉)"}`).join("<br>");
+  const rsiText = latestRsi !== null ? latestRsi.toFixed(1) : "—";
+  document.getElementById("analysisBox").innerHTML = `📊 <b>RSI:</b> ${rsiText} — ${rsiInfo.text}<br>${emaAnalysis}<br>${signal}`;
+  document.getElementById("analysisBox").style.display = "block";
+
+  updateFavBtn(symbol);
+  document.getElementById("stockInfo").style.display = "block";
+  renderEmaControls();
+  if (closes.length) {
+    loadStockChart(symbol, labels, closes);
+    loadRsiChart(labels, rsiVals);
+  }
+}
+
+async function fetchAndRenderStock(symbol) {
+  // ดึงราคา real-time จาก Finnhub
+  let currentPrice = null, currentChange = null, currentChangePct = null;
+  try {
+    const fhRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FH_KEY}`);
+    const fhData = await fhRes.json();
+    if (fhData && fhData.c && fhData.c !== 0) {
+      currentPrice = fhData.c; currentChange = fhData.d; currentChangePct = fhData.dp;
+    }
+  } catch {}
+
+  // ดึงกราฟจาก Alpha Vantage
+  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${AV_KEY}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (data["Note"] || data["Information"]) {
+    // quota หมด — โหลด cache แทน
+    const cached = getStockCache(symbol);
+    if (cached) {
+      renderStockFromData(symbol, cached.closes, cached.volumes, cached.labels, currentPrice, currentChange, currentChangePct, true, cached._saved);
+      return;
+    }
+    if (currentPrice) {
+      renderStockFromData(symbol, [], [], [], currentPrice, currentChange, currentChangePct, false, null);
+    } else {
+      alert("⚠️ API quota หมดวันนี้ และไม่มีข้อมูลแคช — ลองใหม่พรุ่งนี้");
+    }
+    return;
+  }
+
+  const ts = data["Time Series (Daily)"];
+  if (!ts && !currentPrice) { alert("ไม่พบหุ้น ลองใช้: AAPL, MSFT, TSLA, GOOGL, META"); return; }
+
+  let closes = [], volumes = [], labels = [];
+  if (ts) {
+    const dates = Object.keys(ts).sort().slice(-100);
+    closes = dates.map(d => parseFloat(ts[d]["4. close"]));
+    volumes = dates.map(d => parseInt(ts[d]["5. volume"]));
+    labels = dates.map(d => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+    // บันทึก cache
+    setStockCache(symbol, { closes, volumes, labels });
+    addToCacheList(symbol);
+  }
+
+  renderStockFromData(symbol, closes, volumes, labels, currentPrice, currentChange, currentChangePct, false, null);
+}
+
+window.searchStock = async function(forceRefresh = false) {
   const symbol = document.getElementById("stockSymbol").value.trim().toUpperCase();
   if (!symbol) return alert("กรุณาใส่ชื่อหุ้น");
   currentSymbol = symbol;
   document.getElementById("stockInfo").style.display = "none";
 
+  // ถ้าไม่ force refresh และมี cache อยู่ → โหลด cache ทันที
+  if (!forceRefresh) {
+    const cached = getStockCache(symbol);
+    if (cached && cached.closes && cached.closes.length > 0) {
+      // ดึงราคาปัจจุบัน Finnhub real-time
+      let currentPrice = null, currentChange = null, currentChangePct = null;
+      try {
+        const fhRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FH_KEY}`);
+        const fhData = await fhRes.json();
+        if (fhData && fhData.c && fhData.c !== 0) {
+          currentPrice = fhData.c; currentChange = fhData.d; currentChangePct = fhData.dp;
+        }
+      } catch {}
+      renderStockFromData(symbol, cached.closes, cached.volumes, cached.labels, currentPrice, currentChange, currentChangePct, true, cached._saved);
+      return;
+    }
+  }
+
   try {
-    // ดึงราคาปัจจุบันจาก Finnhub ก่อน (real-time ไม่จำกัด quota)
-    let currentPrice = null, currentChange = null, currentChangePct = null, currentVolume = null;
-    try {
-      const fhRes = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FH_KEY}`);
-      const fhData = await fhRes.json();
-      if (fhData && fhData.c && fhData.c !== 0) {
-        currentPrice = fhData.c;
-        currentChange = fhData.d;
-        currentChangePct = fhData.dp;
-        currentVolume = null;
-      }
-    } catch {}
-
-    // ดึงข้อมูลย้อนหลังจาก Alpha Vantage สำหรับกราฟ
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${symbol}&outputsize=compact&apikey=${AV_KEY}`;
-    const res = await fetch(url);
-    const data = await res.json();
-
-    if (data["Note"] || data["Information"]) {
-      // API limit — ถ้ามีราคา Finnhub ให้แสดงราคาได้ แต่ไม่มีกราฟ
-      if (currentPrice) {
-        alert(`⚠️ Alpha Vantage ครบ 25 req/วัน — แสดงราคาปัจจุบันจาก Finnhub ได้ แต่ไม่มีกราฟวันนี้`);
-      } else {
-        alert("⚠️ API ครบโควต้า 25 req/วัน — ลองใหม่พรุ่งนี้ครับ");
-        return;
-      }
-    }
-    const ts = data["Time Series (Daily)"];
-    if (!ts && !currentPrice) { alert("ไม่พบหุ้น ลองใช้: AAPL, MSFT, TSLA, GOOGL, META"); return; }
-
-    let closes = [], volumes = [], labels = [];
-    if (ts) {
-      const dates = Object.keys(ts).sort().slice(-100);
-      closes = dates.map(d => parseFloat(ts[d]["4. close"]));
-      volumes = dates.map(d => parseInt(ts[d]["5. volume"]));
-      labels = dates.map(d => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }));
-    }
-    lastCloses = closes; lastLabels = labels;
-
-    const latest = currentPrice || (closes.length ? closes[closes.length - 1] : 0);
-    const prev = closes.length >= 2 ? closes[closes.length - 2] : latest;
-    const change = currentChange !== null ? currentChange : (latest - prev);
-    const changePct = currentChangePct !== null ? currentChangePct : ((change / (prev||1)) * 100);
-    const rsiVals = closes.length > 15 ? calcRSI(closes) : [];
-    const latestRsi = rsiVals.length ? rsiVals[rsiVals.length - 1] : null;
-    const { supports, resistances } = closes.length ? calcSupportResistance(closes) : { supports: [], resistances: [] };
-    const rsiInfo = latestRsi !== null ? getRsiInfo(latestRsi) : { text: "ต้องการข้อมูลกราฟ", cls: "rsi-neutral" };
-
-    document.getElementById("stockName").innerHTML = `<span style="color:var(--accent)">${symbol}</span> — ข้อมูลหุ้น`;
-    document.getElementById("stockPrice").textContent = `$${latest.toFixed(2)}`;
-    const chgEl = document.getElementById("stockChange");
-    chgEl.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)} (${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%)`;
-    chgEl.style.color = change >= 0 ? "var(--bull)" : "var(--bear)";
-    document.getElementById("stockVolume").textContent = volumes.length ? volumes[volumes.length-1].toLocaleString() : "—";
-    document.getElementById("stockRsi").textContent = latestRsi !== null ? latestRsi.toFixed(1) : "—";
-    document.getElementById("stockRsi").style.color = latestRsi >= 70 ? "var(--danger)" : latestRsi <= 30 ? "var(--success)" : "var(--text)";
-    document.getElementById("rsiZone").innerHTML = `<span class="rsi-zone ${rsiInfo.cls}">${rsiInfo.text}</span>`;
-
-    const emaVals = closes.length ? emaLines.map(e => ({ period: e.period, val: calcEMA(closes, e.period).slice(-1)[0] })) : [];
-    const srBadges = [
-      ...resistances.map(r => `<span class="sr-badge sr-resistance">แนวต้าน $${r.toFixed(2)}</span>`),
-      ...supports.map(s => `<span class="sr-badge sr-support">แนวรับ $${s.toFixed(2)}</span>`)
-    ].join("");
-    document.getElementById("srBadges").innerHTML = srBadges || '<span style="color:var(--text-dim);font-size:0.78rem;">ไม่มีข้อมูลกราฟวันนี้ (API limit)</span>';
-
-    // Analysis
-    let signal = "";
-    if (latestRsi !== null) {
-      if (latestRsi <= 30 && supports.length && latest <= supports[0] * 1.02) signal = "🟢 <b>สัญญาณซื้อ:</b> RSI Oversold + ใกล้แนวรับ";
-      else if (latestRsi >= 70 && resistances.length && latest >= resistances[0] * 0.98) signal = "🔴 <b>สัญญาณขาย:</b> RSI Overbought + ใกล้แนวต้าน";
-      else signal = "⚪ <b>สัญญาณ:</b> รอดูท่าที (Neutral)";
-    } else { signal = "⚪ ไม่มีข้อมูลกราฟเพียงพอสำหรับวิเคราะห์ (Alpha Vantage limit)"; }
-    const emaAnalysis = emaVals.map(e => `📉 EMA${e.period}: $${e.val.toFixed(2)} — ราคา${latest > e.val ? "เหนือ (Bullish 📈)" : "ต่ำกว่า (Bearish 📉)"}`).join("<br>");
-    document.getElementById("analysisBox").innerHTML = `📊 <b>RSI:</b> ${latestRsi.toFixed(1)} — ${rsiInfo.text}<br>${emaAnalysis}<br>${signal}`;
-    document.getElementById("analysisBox").style.display = "block";
-
-    updateFavBtn(symbol);
-    document.getElementById("stockInfo").style.display = "block";
-    renderEmaControls();
-    loadStockChart(symbol, labels, closes);
-    loadRsiChart(labels, rsiVals);
+    await fetchAndRenderStock(symbol);
   } catch (err) {
     console.error(err);
-    alert("ดึงข้อมูลไม่ได้ กรุณาลองใหม่");
+    // ถ้า error ลองโหลด cache
+    const cached = getStockCache(symbol);
+    if (cached) {
+      renderStockFromData(symbol, cached.closes, cached.volumes, cached.labels, null, null, null, true, cached._saved);
+    } else {
+      alert("ดึงข้อมูลไม่ได้ กรุณาลองใหม่");
+    }
   }
+};
+
+window.refreshStock = async function() {
+  await window.searchStock(true);
+};
+
+function renderCachedList() {
+  const el = document.getElementById("cachedStocksList");
+  if (!el) return;
+  const list = getCacheList();
+  if (!list.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div style="font-size:0.72rem;color:var(--text-sub);margin-bottom:6px;">💾 หุ้นที่แคชไว้ — คลิกเพื่อโหลด ไม่เสีย quota</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;">
+    ${list.map(sym => {
+      const c = getStockCache(sym);
+      const d = c && c._saved ? new Date(c._saved).toLocaleDateString("th-TH",{day:"numeric",month:"short"}) : "";
+      return `<button onclick="document.getElementById('stockSymbol').value='${sym}';searchStock();"
+        style="background:var(--bg-card2);border:1px solid var(--border);color:var(--accent);padding:4px 12px;border-radius:20px;font-size:0.78rem;cursor:pointer;">
+        ${sym} <span style="color:var(--text-dim);font-size:0.65rem;">${d}</span>
+        <span onclick="event.stopPropagation();clearStockCache('${sym}')" style="color:var(--text-dim);margin-left:6px;font-size:0.75rem;">✕</span>
+      </button>`;
+    }).join("")}
+  </div>`;
+}
+
+window.clearStockCache = function(sym) {
+  localStorage.removeItem("stockcache_" + sym);
+  const list = getCacheList().filter(s => s !== sym);
+  Storage.set("stockcache_list", list);
+  renderCachedList();
 };
 
 function loadStockChart(symbol, labels, closes) {
