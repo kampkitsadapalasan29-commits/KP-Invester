@@ -867,6 +867,147 @@ function renderNews(articles) {
   }).join("");
 }
 
+
+// ============================================
+// STOCK VALUATION — Graham · DCF · P/E Based
+// ============================================
+window.calcValuation = function() {
+  const sym    = document.getElementById("valSymbol").value.trim().toUpperCase() || "หุ้น";
+  const price  = parseFloat(document.getElementById("valPrice").value) || 0;
+  const eps    = parseFloat(document.getElementById("valEPS").value) || 0;
+  const bv     = parseFloat(document.getElementById("valBV").value) || 0;
+  const fcf    = parseFloat(document.getElementById("valFCF").value) || 0;
+  const growth = parseFloat(document.getElementById("valGrowth").value) / 100 || 0.1;
+  const indPE  = parseFloat(document.getElementById("valIndustryPE").value) || 25;
+  const disc   = parseFloat(document.getElementById("valDiscount").value) / 100 || 0.1;
+
+  if (!price) { alert("กรุณากรอกราคาปัจจุบัน"); return; }
+
+  // ── 1. Graham Number ──────────────────────
+  let graham = null, grahamNote = "";
+  if (eps > 0 && bv > 0) {
+    graham = Math.sqrt(22.5 * eps * bv);
+    grahamNote = `√(22.5 × EPS ${eps} × BV ${bv})`;
+  } else { grahamNote = "ต้องการ EPS และ Book Value"; }
+
+  // ── 2. DCF (Discounted Cash Flow) 10 ปี ───
+  let dcf = null, dcfNote = "";
+  if (fcf > 0) {
+    let total = 0;
+    const termGrowth = 0.03; // terminal growth 3%
+    for (let y = 1; y <= 10; y++) {
+      total += fcf * Math.pow(1 + growth, y) / Math.pow(1 + disc, y);
+    }
+    // Terminal value
+    const fcf10 = fcf * Math.pow(1 + growth, 10);
+    const tv = (fcf10 * (1 + termGrowth)) / (disc - termGrowth);
+    total += tv / Math.pow(1 + disc, 10);
+    dcf = total;
+    dcfNote = `FCF ${fcf} · Growth ${(growth*100).toFixed(0)}% · Discount ${(disc*100).toFixed(0)}% · Terminal 3%`;
+  } else { dcfNote = "ต้องการ Free Cash Flow Per Share"; }
+
+  // ── 3. P/E Based ──────────────────────────
+  let peVal = null, peNote = "";
+  if (eps > 0) {
+    peVal = eps * indPE;
+    peNote = `EPS ${eps} × Industry P/E ${indPE}`;
+  } else { peNote = "ต้องการ EPS"; }
+
+  // ── Average intrinsic value ────────────────
+  const vals = [graham, dcf, peVal].filter(v => v !== null);
+  const avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+
+  // ── Render ────────────────────────────────
+  document.getElementById("valResult").style.display = "block";
+
+  // Method cards
+  const methods = [
+    { key:"graham", name:"Graham Number", icon:"🔢", val:graham, note:grahamNote, color:"#fbbf24" },
+    { key:"dcf",    name:"DCF (10 ปี)",   icon:"📊", val:dcf,    note:dcfNote,    color:"#38bdf8" },
+    { key:"pe",     name:"P/E Based",     icon:"📈", val:peVal,  note:peNote,     color:"#a78bfa" },
+  ];
+
+  document.getElementById("valMethodCards").innerHTML = methods.map(m => {
+    if (m.val === null) return `
+      <div class="val-method-card ${m.key}">
+        <div class="val-method-name">${m.icon} ${m.name}</div>
+        <div style="color:var(--text-dim);font-size:0.8rem;padding:1rem 0;">${m.note}</div>
+      </div>`;
+    const diff = ((m.val - price) / price * 100);
+    const cls = diff > 10 ? "val-cheap" : diff < -10 ? "val-pricey" : "val-fair";
+    const label = diff > 10 ? "ถูกกว่าที่ควร 🟢" : diff < -10 ? "แพงกว่าที่ควร 🔴" : "ราคาพอดี 🟡";
+    return `
+      <div class="val-method-card ${m.key}">
+        <div class="val-method-name">${m.icon} ${m.name}</div>
+        <div class="val-method-price" style="color:${m.color};">$${m.val.toFixed(2)}</div>
+        <div class="val-method-diff ${cls}">${diff>=0?"+":""}${diff.toFixed(1)}% ${label}</div>
+        <div style="font-size:0.65rem;color:var(--text-dim);margin-top:8px;">${m.note}</div>
+      </div>`;
+  }).join("");
+
+  // Verdict
+  const verdictEl = document.getElementById("valVerdict");
+  if (avg !== null) {
+    const avgDiff = ((avg - price) / price * 100);
+    const isUnder = avgDiff > 15;
+    const isOver  = avgDiff < -15;
+    const verdictColor = isUnder ? "#22c55e" : isOver ? "#ef4444" : "#fbbf24";
+    const verdictIcon  = isUnder ? "🟢" : isOver ? "🔴" : "🟡";
+    const verdictText  = isUnder ? "ราคาถูกกว่ามูลค่าที่แท้จริง — อาจเป็นโอกาสซื้อ"
+                       : isOver  ? "ราคาแพงกว่ามูลค่าที่แท้จริง — ควรระวัง"
+                       : "ราคาอยู่ในช่วงสมเหตุสมผล";
+    verdictEl.style.cssText = `border: 2px solid ${verdictColor}33; background: ${verdictColor}0f; border-radius:16px; padding:1.4rem; margin-bottom:1rem; text-align:center;`;
+    verdictEl.innerHTML = `
+      <div style="font-size:0.78rem;color:var(--text-sub);margin-bottom:6px;">${sym} — ราคาปัจจุบัน $${price}</div>
+      <div style="font-size:2rem;font-weight:900;color:${verdictColor};">$${avg.toFixed(2)}</div>
+      <div style="font-size:0.82rem;color:var(--text-sub);margin:4px 0;">มูลค่าที่แท้จริงเฉลี่ย (${vals.length} วิธี)</div>
+      <div style="font-size:1rem;font-weight:700;color:${verdictColor};margin-top:8px;">${verdictIcon} ${verdictText}</div>
+      <div style="font-size:0.85rem;color:${verdictColor};margin-top:4px;">${avgDiff>=0?"+":""}${avgDiff.toFixed(1)}% เทียบกับราคาปัจจุบัน</div>`;
+  } else {
+    verdictEl.innerHTML = `<div style="color:var(--text-dim);text-align:center;padding:1rem;">กรอกข้อมูลให้ครบเพื่อดูผลรวม</div>`;
+  }
+
+  // Explanation
+  document.getElementById("valExplain").innerHTML = `
+    <div style="margin-bottom:10px;"><strong style="color:var(--gold);">🔢 Graham Number</strong><br>
+    สูตร: √(22.5 × EPS × Book Value) — Benjamin Graham บิดาแห่ง Value Investing ใช้สูตรนี้หาหุ้นที่ราคาถูกเกินไป เหมาะกับหุ้น Traditional ที่มีกำไรและทรัพย์สินชัดเจน</div>
+    <div style="margin-bottom:10px;"><strong style="color:var(--accent);">📊 DCF Model</strong><br>
+    คำนวณมูลค่าปัจจุบันของกระแสเงินสดอิสระ (Free Cash Flow) ในอนาคต 10 ปี โดยหักลด (Discount) กลับมาที่วันนี้ เหมาะกับหุ้นที่มี FCF สม่ำเสมอ</div>
+    <div><strong style="color:var(--purple);">📈 P/E Based</strong><br>
+    EPS × P/E ของอุตสาหกรรม — วิธีง่ายที่สุด เปรียบเทียบว่าถ้าหุ้นนี้ถูก Valuate ด้วย P/E เดียวกับคู่แข่ง ราคาที่ยุติธรรมควรเป็นเท่าไหร่</div>
+    <div style="margin-top:12px;padding:10px;background:var(--bg-card2);border-radius:8px;font-size:0.75rem;color:var(--text-dim);">
+    ⚠️ การประเมินมูลค่าหุ้นเป็นเพียงการประมาณการ ไม่ใช่การรับประกันผลตอบแทน ควรใช้ประกอบการตัดสินใจร่วมกับปัจจัยอื่น</div>`;
+
+  // Margin of Safety
+  if (avg !== null) {
+    const mos30 = avg * 0.7; // 30% MOS
+    const mos50 = avg * 0.5; // 50% MOS
+    const safetyPct = Math.max(0, Math.min(100, ((avg - price) / avg * 100)));
+    const barColor = safetyPct > 30 ? "#22c55e" : safetyPct > 0 ? "#fbbf24" : "#ef4444";
+    document.getElementById("valMOS").innerHTML = `
+      <p style="margin-bottom:10px;">Benjamin Graham แนะนำให้ซื้อหุ้นที่ราคาต่ำกว่ามูลค่าที่แท้จริงอย่างน้อย <strong>30-50%</strong> เพื่อสร้างส่วนเผื่อความปลอดภัย</p>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:0.78rem;color:var(--text-sub);">Margin of Safety ปัจจุบัน</span>
+        <span style="font-size:0.82rem;font-weight:700;color:${barColor};">${safetyPct.toFixed(1)}%</span>
+      </div>
+      <div class="mos-bar-wrap"><div class="mos-bar" style="width:${Math.min(safetyPct,100)}%;background:${barColor};"></div></div>
+      <div class="grid grid-2" style="margin-top:14px;gap:10px;">
+        <div style="background:var(--bg-card2);border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-sub);">ราคาเป้าซื้อ (MOS 30%)</div>
+          <div style="font-size:1.3rem;font-weight:800;color:var(--success);">$${mos30.toFixed(2)}</div>
+          <div style="font-size:0.68rem;color:var(--text-dim);">Conservative Buy Zone</div>
+        </div>
+        <div style="background:var(--bg-card2);border-radius:10px;padding:12px;text-align:center;">
+          <div style="font-size:0.72rem;color:var(--text-sub);">ราคาเป้าซื้อ (MOS 50%)</div>
+          <div style="font-size:1.3rem;font-weight:800;color:var(--gold);">$${mos50.toFixed(2)}</div>
+          <div style="font-size:0.68rem;color:var(--text-dim);">Aggressive Buy Zone</div>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById("valResult").scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 // ============================================
 // INIT
 // ============================================
