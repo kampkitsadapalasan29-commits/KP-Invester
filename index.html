@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+<canvas id="particle-canvas"></canvas>
 
 <!-- TOP HEADER -->
 <header class="header">
@@ -440,5 +441,118 @@
 
 </div><!-- /container -->
 <script src="./script.js"></script>
+<script>
+// ── BACKGROUND ENGINE — Particle Network + Gradient Wave (switchable) ──
+(function() {
+  const canvas = document.getElementById("particle-canvas");
+  const ctx = canvas.getContext("2d");
+  let W, H, animId;
+  let mouse = { x: -9999, y: -9999 };
+  let particles = [];
+  const COLORS = ["#38bdf8","#3b82f6","#a78bfa","#22c55e","#fbbf24"];
+  let BG_MODE = localStorage.getItem("bgMode") || "particle";
+
+  window.setBgMode = function(mode) {
+    BG_MODE = mode;
+    localStorage.setItem("bgMode", mode);
+    if (animId) cancelAnimationFrame(animId);
+    if (mode === "particle") { initParticles(); loopParticle(); }
+    else { loopWave(); }
+    updateBgBtns();
+  };
+
+  function updateBgBtns() {
+    document.querySelectorAll(".bg-btn").forEach(b => {
+      b.style.opacity = b.dataset.mode === BG_MODE ? "1" : "0.4";
+      b.style.borderColor = b.dataset.mode === BG_MODE ? "var(--accent)" : "var(--border)";
+      b.style.color = b.dataset.mode === BG_MODE ? "var(--accent)" : "var(--text-sub)";
+    });
+  }
+
+  function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+
+  // PARTICLE
+  const COUNT = window.innerWidth < 600 ? 55 : 110;
+  const MAX_DIST = 140;
+
+  function mkP() {
+    return { x: Math.random()*W, y: Math.random()*H,
+      vx: (Math.random()-0.5)*0.45, vy: (Math.random()-0.5)*0.45,
+      r: Math.random()*2+1, color: COLORS[Math.floor(Math.random()*COLORS.length)] };
+  }
+  function initParticles() { resize(); particles = Array.from({length:COUNT}, mkP); }
+
+  function loopParticle() {
+    ctx.clearRect(0,0,W,H);
+    for (const p of particles) {
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0||p.x>W) p.vx*=-1;
+      if(p.y<0||p.y>H) p.vy*=-1;
+    }
+    for (let i=0;i<particles.length;i++) {
+      const a=particles[i];
+      const md=Math.hypot(a.x-mouse.x,a.y-mouse.y);
+      if(md<130){ctx.beginPath();ctx.strokeStyle=`rgba(56,189,248,${(1-md/130)*0.55})`;ctx.lineWidth=0.9;ctx.moveTo(a.x,a.y);ctx.lineTo(mouse.x,mouse.y);ctx.stroke();}
+      for(let j=i+1;j<particles.length;j++){
+        const b=particles[j];const d=Math.hypot(a.x-b.x,a.y-b.y);
+        if(d<MAX_DIST){ctx.beginPath();ctx.strokeStyle=`rgba(59,130,246,${(1-d/MAX_DIST)*0.35})`;ctx.lineWidth=0.6;ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+      }
+      ctx.beginPath();ctx.arc(a.x,a.y,a.r,0,Math.PI*2);ctx.fillStyle=a.color;ctx.globalAlpha=0.75;ctx.fill();ctx.globalAlpha=1;
+    }
+    animId=requestAnimationFrame(loopParticle);
+  }
+
+  // WAVE
+  const WAVES=[
+    {amp:70,freq:0.006,speed:0.012,color:"rgba(59,130,246,0.18)",yBase:0.35},
+    {amp:55,freq:0.009,speed:0.018,color:"rgba(167,139,250,0.15)",yBase:0.5},
+    {amp:45,freq:0.007,speed:0.010,color:"rgba(56,189,248,0.12)",yBase:0.65},
+    {amp:35,freq:0.011,speed:0.022,color:"rgba(34,197,94,0.09)",yBase:0.78},
+  ];
+
+  function drawWave(l,t){
+    ctx.beginPath();ctx.moveTo(0,H);
+    for(let x=0;x<=W;x+=4){
+      const y=l.yBase*H+Math.sin(x*l.freq+t*l.speed*60)*l.amp+Math.sin(x*l.freq*1.7+t*l.speed*40)*l.amp*0.4;
+      ctx.lineTo(x,y);
+    }
+    ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fillStyle=l.color;ctx.fill();
+  }
+
+  function loopWave(t=0){
+    ctx.clearRect(0,0,W,H);
+    if(mouse.x>0){
+      const mg=ctx.createRadialGradient(mouse.x,mouse.y,0,mouse.x,mouse.y,220);
+      mg.addColorStop(0,"rgba(56,189,248,0.08)");mg.addColorStop(1,"rgba(56,189,248,0)");
+      ctx.fillStyle=mg;ctx.fillRect(0,0,W,H);
+    }
+    WAVES.forEach(l=>drawWave(l,t*0.001));
+    animId=requestAnimationFrame(loopWave);
+  }
+
+  // init
+  resize();
+  window.addEventListener("resize",resize);
+  window.addEventListener("mousemove",e=>{mouse.x=e.clientX;mouse.y=e.clientY;});
+  window.addEventListener("touchmove",e=>{mouse.x=e.touches[0].clientX;mouse.y=e.touches[0].clientY;},{passive:true});
+  window.addEventListener("mouseleave",()=>{mouse.x=-9999;mouse.y=-9999;});
+
+  if(BG_MODE==="particle"){initParticles();loopParticle();}else{loopWave();}
+
+  // inject switcher buttons into header
+  setTimeout(()=>{
+    const sw=document.createElement("div");
+    sw.style.cssText="display:flex;gap:5px;align-items:center;";
+    sw.innerHTML=`
+      <button class="bg-btn" data-mode="particle" onclick="setBgMode('particle')"
+        style="background:none;border:1px solid var(--border);color:var(--text-sub);border-radius:8px;padding:3px 9px;cursor:pointer;font-size:0.72rem;transition:all 0.2s;white-space:nowrap;">✨ Particle</button>
+      <button class="bg-btn" data-mode="wave" onclick="setBgMode('wave')"
+        style="background:none;border:1px solid var(--border);color:var(--text-sub);border-radius:8px;padding:3px 9px;cursor:pointer;font-size:0.72rem;transition:all 0.2s;white-space:nowrap;">🌊 Wave</button>`;
+    const themeBtn=document.getElementById("themeBtn");
+    if(themeBtn) themeBtn.parentNode.insertBefore(sw,themeBtn);
+    updateBgBtns();
+  },200);
+})();
+</script>
 </body>
 </html>
